@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mindspace_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mindspace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindspace_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/mindspace"
+      BETTER_AUTH_SECRET: "change-this-to-a-32-char-secret-in-production"
+      BETTER_AUTH_URL: "http://localhost:3000"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ml-service:
+    build:
+      context: ./python-ml-service
+      dockerfile: Dockerfile
+    container_name: mindspace_ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  postgres_data:
