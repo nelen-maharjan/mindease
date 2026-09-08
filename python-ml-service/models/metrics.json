@@ -1,0 +1,46 @@
+{
+  "algorithm": "HistGradientBoostingClassifier (TF-IDF + TruncatedSVD/LSA)",
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "n_train": 1568,
+  "n_test": 392,
+  "n_classes": 7,
+  "per_class": {
+    "angry": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "anxious": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "burnout": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "calm": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "happy": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "lonely": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "sad": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  },
+  "trained_at": "2026-09-08T16:33:13.013392+00:00"
+}
