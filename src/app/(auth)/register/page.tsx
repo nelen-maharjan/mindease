@@ -64,26 +64,21 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-
-        {/* Header OUTSIDE card (cleaner hierarchy) */}
+    <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Create your account
           </h1>
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Start building healthier habits today.
           </p>
         </div>
 
-        {/* Card */}
-        <Card className="w-full rounded-2xl border border-slate-200/60 shadow-xl bg-white">
+        <Card className="w-full rounded-2xl border border-border shadow-xl bg-card">
           <CardContent className="p-6 space-y-4">
 
-            {/* Error (more integrated feel) */}
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -99,7 +94,7 @@ export default function RegisterPage() {
                   placeholder="John Doe"
                   autoComplete="name"
                   required
-                  className="h-11 rounded-xl border-slate-200 focus-visible:ring-emerald-500/30"
+                  className="h-11 rounded-xl"
                 />
               </div>
 
@@ -113,7 +108,7 @@ export default function RegisterPage() {
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
-                  className="h-11 rounded-xl border-slate-200 focus-visible:ring-emerald-500/30"
+                  className="h-11 rounded-xl"
                 />
               </div>
 
@@ -129,13 +124,13 @@ export default function RegisterPage() {
                     placeholder="Minimum 8 characters"
                     autoComplete="new-password"
                     required
-                    className="h-11 rounded-xl border-slate-200 pr-12 focus-visible:ring-emerald-500/30"
+                    className="h-11 rounded-xl pr-12"
                   />
 
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -158,7 +153,7 @@ export default function RegisterPage() {
                     placeholder="Re-enter password"
                     autoComplete="new-password"
                     required
-                    className="h-11 rounded-xl border-slate-200 pr-12 focus-visible:ring-emerald-500/30"
+                    className="h-11 rounded-xl pr-12"
                   />
 
                   <button
@@ -166,7 +161,7 @@ export default function RegisterPage() {
                     onClick={() =>
                       setShowConfirmPassword((v) => !v)
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -189,22 +184,22 @@ export default function RegisterPage() {
 
             {/* Divider */}
             <div className="flex items-center gap-4 py-2">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs text-slate-400">OR</span>
-              <div className="h-px flex-1 bg-slate-200" />
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
             </div>
 
             {/* Google */}
             <Button
               type="button"
               variant="outline"
-              className="w-full h-11 rounded-xl border-slate-200 hover:bg-slate-50"
+              className="w-full h-11 rounded-xl"
             >
               Continue with Google
             </Button>
 
             {/* Footer */}
-            <p className="text-center text-sm text-slate-600">
+            <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link
                 href="/login"
@@ -214,14 +209,13 @@ export default function RegisterPage() {
               </Link>
             </p>
 
-            <p className="text-center text-xs text-slate-500 leading-relaxed">
+            <p className="text-center text-xs text-muted-foreground leading-relaxed">
               MindEase is a wellness tool and not a medical service.
               If you are experiencing a mental health emergency, seek
               professional help immediately.
             </p>
           </CardContent>
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }

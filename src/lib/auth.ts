@@ -30,6 +30,16 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        required: false,
+        defaultValue: "USER",
+        input: false,
+      },
+    },
+  },
 });
 
 export type Session = typeof auth.$Infer.Session;

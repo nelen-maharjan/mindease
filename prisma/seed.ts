@@ -9,12 +9,13 @@ async function main() {
   // We insert raw rows here for development convenience.
   const user = await prisma.user.upsert({
     where: { email: "demo@mindspace.app" },
-    update: {},
+    update: { role: "ADMIN" },
     create: {
       id: "demo-user-001",
       email: "demo@mindspace.app",
       name: "Alex Demo",
       emailVerified: true,
+      role: "ADMIN",
     },
   });
 

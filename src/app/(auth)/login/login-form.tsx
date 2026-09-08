@@ -58,22 +58,22 @@ export function LoginForm() {
 
       {/* Header */}
       <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
           Welcome back
         </h1>
 
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-muted-foreground">
           Sign in to continue your wellness journey.
         </p>
       </div>
 
       {/* Card */}
-      <Card className="rounded-2xl border border-slate-200/60 bg-white shadow-xl">
+      <Card className="rounded-2xl border border-border bg-card shadow-xl">
         <CardContent className="p-6 space-y-4">
 
           {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -91,7 +91,7 @@ export function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11 rounded-xl border-slate-200 focus-visible:ring-emerald-500/30"
+                className="h-11 rounded-xl"
               />
             </div>
 
@@ -117,13 +117,13 @@ export function LoginForm() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 rounded-xl border-slate-200 pr-12 focus-visible:ring-emerald-500/30"
+                  className="h-11 rounded-xl pr-12"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={
                     showPassword ? "Hide password" : "Show password"
                   }
@@ -151,22 +151,22 @@ export function LoginForm() {
 
           {/* Divider */}
           <div className="flex items-center gap-4 py-2">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs text-slate-400">OR</span>
-            <div className="h-px flex-1 bg-slate-200" />
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
           </div>
 
           {/* Google */}
           <Button
             type="button"
             variant="outline"
-            className="h-11 w-full rounded-xl border-slate-200 hover:bg-slate-50"
+            className="h-11 w-full rounded-xl"
           >
             Continue with Google
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-sm text-slate-600">
+          <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link
               href="/register"
@@ -176,7 +176,7 @@ export function LoginForm() {
             </Link>
           </p>
 
-          <p className="text-center text-xs leading-relaxed text-slate-500">
+          <p className="text-center text-xs leading-relaxed text-muted-foreground">
             MindEase is a wellness tool and not a medical service.
             If you are experiencing a mental health emergency, seek
             professional help immediately.

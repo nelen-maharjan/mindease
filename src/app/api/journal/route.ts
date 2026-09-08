@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { wordCount } from "@/lib/utils";
+import { analyzeJournalText } from "@/lib/ml";
 
 const createJournalSchema = z.object({
   title: z.string().min(1).max(200),
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { title, content, tags, moodSnapshot } = parsed.data;
-    const entry = await prisma.journalEntry.create({
+    let entry = await prisma.journalEntry.create({
       data: {
         userId: session.user.id,
         title,
@@ -78,6 +79,17 @@ export async function POST(request: NextRequest) {
         wordCount: wordCount(content),
       },
     });
+
+    const analysis = await analyzeJournalText(content);
+    if (analysis) {
+      entry = await prisma.journalEntry.update({
+        where: { id: entry.id },
+        data: {
+          sentimentScore: analysis.signedScore,
+          emotionLabels: analysis.emotions,
+        },
+      });
+    }
 
     return NextResponse.json({ data: entry }, { status: 201 });
   } catch (error) {

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/index";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "⊞" },
@@ -25,11 +26,16 @@ const insightItems = [
   { label: "Settings", href: "/settings", icon: "⚙" },
 ];
 
+const adminItems = [
+  { label: "Admin", href: "/admin", icon: "▣" },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
   const user = session?.user;
+  const isAdmin = (user as { role?: string } | undefined)?.role === "ADMIN";
 
   const handleSignOut = async () => {
     await signOut();
@@ -40,15 +46,18 @@ export function Sidebar() {
     <aside className="w-56 shrink-0 flex flex-col h-screen bg-card border-r border-border sticky top-0">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-border">
-        <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">
-            M
-          </div>
-          <div>
-            <p className="text-sm font-semibold tracking-tight">MindEase</p>
-            <p className="text-[10px] text-muted-foreground">Wellness companion</p>
-          </div>
-        </Link>
+        <div className="flex items-start justify-between gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+              M
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight">MindEase</p>
+              <p className="text-[10px] text-muted-foreground">Wellness companion</p>
+            </div>
+          </Link>
+          <ThemeToggle />
+        </div>
       </div>
 
       {/* Nav */}
@@ -56,6 +65,7 @@ export function Sidebar() {
         <NavSection label="Main" items={navItems} pathname={pathname} />
         <NavSection label="Wellness" items={wellnessItems} pathname={pathname} />
         <NavSection label="Insights" items={insightItems} pathname={pathname} />
+        {isAdmin && <NavSection label="Platform" items={adminItems} pathname={pathname} />}
       </nav>
 
       {/* User footer */}

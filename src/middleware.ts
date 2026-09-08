@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
 // Routes that require authentication
-const PROTECTED_PREFIXES = ["/dashboard", "/mood", "/journal", "/chat", "/habits", "/goals", "/analytics", "/recommendations", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/mood", "/journal", "/chat", "/habits", "/goals", "/analytics", "/recommendations", "/settings", "/admin"];
 // Routes accessible only to guests
 const AUTH_ROUTES = ["/login", "/register"];
 

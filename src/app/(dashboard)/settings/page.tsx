@@ -1,11 +1,14 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, Separator, Label } from "@/components/ui/index";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toaster";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -43,6 +46,8 @@ export default function SettingsPage() {
           <Button onClick={handleSave} isLoading={isSaving}>Save changes</Button>
         </CardContent>
       </Card>
+
+      <AppearanceCard />
 
       <Card>
         <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
@@ -111,6 +116,50 @@ export default function SettingsPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function AppearanceCard() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const options = [
+    { value: "light", label: "Light", icon: Sun },
+    { value: "dark", label: "Dark", icon: Moon },
+    { value: "system", label: "System", icon: Monitor },
+  ] as const;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Appearance</CardTitle></CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-3">Choose how MindEase looks on this device</p>
+        <div className="grid grid-cols-3 gap-2">
+          {options.map((opt) => {
+            const Icon = opt.icon;
+            const active = mounted && theme === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTheme(opt.value)}
+                className={cn(
+                  "flex flex-col items-center gap-2 rounded-xl border px-3 py-3 text-sm transition-colors",
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-muted/60 text-muted-foreground"
+                )}
+              >
+                <Icon className="size-4" />
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
