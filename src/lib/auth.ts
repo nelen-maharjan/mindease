@@ -1,8 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -22,11 +20,11 @@ export const auth = betterAuth({
     }),
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24,
+    expiresIn: 60 * 60 * 24 * 30, // 30 days
+    updateAge: 60 * 60 * 24, // 1 day
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60,
+      maxAge: 60 * 60 * 24 * 7, // 7 days (was 5 minutes!)
     },
   },
   trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],

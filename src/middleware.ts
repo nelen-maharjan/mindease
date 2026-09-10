@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 
 // Routes that require authentication
 const PROTECTED_PREFIXES = ["/dashboard", "/mood", "/journal", "/chat", "/habits", "/goals", "/analytics", "/recommendations", "/settings", "/admin"];
@@ -17,7 +16,7 @@ export async function middleware(request: NextRequest) {
 
   try {
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: request.headers,
     });
 
     if (isProtected && !session) {
