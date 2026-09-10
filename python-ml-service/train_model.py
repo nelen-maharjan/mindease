@@ -125,7 +125,6 @@ def build_corpus(n_per_class: int = 350, seed: int = 42) -> tuple[list[str], lis
             labels.append(label)
     return texts, labels
 
-
 def train() -> dict:
     texts, labels = build_corpus(n_per_class=400)
     encoder = LabelEncoder()
@@ -209,7 +208,6 @@ def train() -> dict:
     joblib.dump(bundle, MODELS / "mood_hgb.joblib")
     (MODELS / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     return metrics
-
 
 if __name__ == "__main__":
     result = train()

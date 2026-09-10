@@ -63,7 +63,6 @@ class MoodEntry(BaseModel):
     intensity: int
     date: str
 
-
 class TrendRequest(BaseModel):
     entries: List[MoodEntry]
 
@@ -73,11 +72,9 @@ class SentimentResponse(BaseModel):
     score: float
     emotions: List[str]
 
-
 class MoodClassification(BaseModel):
     label: str
     confidence: float
-
 
 class TrendAnalysis(BaseModel):
     weekly_average: float
@@ -86,13 +83,11 @@ class TrendAnalysis(BaseModel):
     anomalies: List[str]
     dominant_mood: str
 
-
 class RecommendationResponse(BaseModel):
     type: str
     title: str
     description: str
     priority: int
-
 
 MOOD_SCORE_MAP = {
     "HAPPY": 9,
@@ -116,7 +111,6 @@ MOOD_TO_SENTIMENT = {
     "lonely": "negative",
     "burnout": "anxiety",
 }
-
 
 def load_bundle():
     global BUNDLE
@@ -187,7 +181,6 @@ def analyze_sentiment(body: TextInput):
         score=mood.confidence,
         emotions=[mood.label, label],
     )
-
 
 @app.post("/classify-mood", response_model=MoodClassification)
 def classify_mood(body: TextInput):
