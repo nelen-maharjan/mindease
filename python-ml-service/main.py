@@ -1,8 +1,8 @@
 """
 MindEase ML Service — FastAPI
 
-Mood classification uses a trained Histogram Gradient Boosting model
-(TF-IDF → TruncatedSVD / LSA → HGB). Sentiment and recommendations
+Mood classification uses a trained Logistic Regression model
+(TF-IDF → LogisticRegression). Sentiment and recommendations
 are derived from that model. Isolation Forest flags unusual mood scores.
 """
 
@@ -24,7 +24,10 @@ from pydantic import BaseModel
 from train_model import train as run_training
 
 ROOT = Path(__file__).parent
-MODEL_PATH = ROOT / "models" / "mood_hgb.joblib"
+MODEL_PATHS = [
+    ROOT / "models" / "mood_classifier.joblib",
+    ROOT / "models" / "mood_hgb.joblib",
+]
 METRICS_PATH = ROOT / "models" / "metrics.json"
 
 BUNDLE = None
@@ -32,22 +35,20 @@ BUNDLE = None
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if not load_bundle():
-        run_training()
-        load_bundle()
+    load_bundle()
     yield
 
 
 app = FastAPI(
     title="MindEase ML Service",
-    description="Trained HGB mood classifier, sentiment, trends, and anomalies",
-    version="2.0.0",
+    description="Trained Logistic Regression mood classifier, sentiment, trends, and anomalies",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://yourdomain.com"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://yourdomain.com"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -94,26 +95,35 @@ class RecommendationResponse(BaseModel):
 
 
 MOOD_SCORE_MAP = {
-    "HAPPY": 9, "GOOD": 7, "NEUTRAL": 5, "SAD": 3,
-    "DEPRESSED": 1, "ANGRY": 2, "ANXIOUS": 3, "EXHAUSTED": 4,
+    "HAPPY": 9,
+    "GOOD": 7,
+    "CALM": 7,
+    "NEUTRAL": 5,
+    "SAD": 3,
+    "DEPRESSED": 1,
+    "ANGRY": 2,
+    "ANXIOUS": 3,
+    "EXHAUSTED": 4,
 }
 
 MOOD_TO_SENTIMENT = {
     "happy": "positive",
     "calm": "neutral",
     "sad": "negative",
+    "anxious": "anxiety",
+    # backwards-compatibility
     "angry": "negative",
     "lonely": "negative",
-    "burnout": "stress",
-    "anxious": "anxiety",
+    "burnout": "anxiety",
 }
 
 
 def load_bundle():
     global BUNDLE
-    if MODEL_PATH.exists():
-        BUNDLE = joblib.load(MODEL_PATH)
-        return True
+    for path in MODEL_PATHS:
+        if path.exists():
+            BUNDLE = joblib.load(path)
+            return True
     BUNDLE = None
     return False
 
@@ -153,7 +163,7 @@ def model_info():
     return {
         "status": "ok" if BUNDLE else "untrained",
         "loaded": BUNDLE is not None,
-        "algorithm": metrics.get("algorithm", "HistGradientBoostingClassifier"),
+        "algorithm": metrics.get("algorithm", "LogisticRegression (TF-IDF)"),
         "trainedAt": metrics.get("trained_at"),
         "metrics": metrics,
     }
@@ -247,24 +257,35 @@ def get_recommendations(body: TextInput):
         recs.append(RecommendationResponse(
             type="WALKING", priority=2,
             title="10-minute outdoor walk",
-            description="Fresh air and movement lower cortisol within minutes.",
+            description="Fresh air and rhythmic movement lower cortisol and clear nervous tension.",
         ))
     elif sentiment.label == "negative":
         recs.append(RecommendationResponse(
             type="JOURNALING_PROMPT", priority=1,
             title="Gratitude journaling",
-            description="Write 3 specific things you appreciate today. Specificity amplifies the effect.",
+            description="Write 3 specific things you appreciate today. Specificity amplifies the neural effect.",
         ))
         recs.append(RecommendationResponse(
             type="SOCIAL", priority=2,
             title="Reach out to someone",
-            description="A short voice note to a friend can shift your emotional state significantly.",
+            description="A short message or call to a friend can shift your emotional baseline significantly.",
         ))
     elif sentiment.label == "positive":
         recs.append(RecommendationResponse(
             type="MEDITATION", priority=3,
             title="Loving-kindness meditation",
-            description="Extend your positive mood outward. 5 minutes of metta practice.",
+            description="Extend your positive mood outward. Spend 5 minutes wishing peace to yourself and others.",
+        ))
+        recs.append(RecommendationResponse(
+            type="GRATITUDE", priority=2,
+            title="Savor the moment",
+            description="Write down what contributed to this positive moment to anchor it in memory.",
+        ))
+    else:
+        recs.append(RecommendationResponse(
+            type="MINDFULNESS", priority=2,
+            title="Mindful 2-minute pause",
+            description="Check in with your body. Soften your shoulders and take three unhurried breaths.",
         ))
 
     recs.append(RecommendationResponse(

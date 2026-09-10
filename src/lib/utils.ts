@@ -22,16 +22,58 @@ export function getWeekDays(date = new Date()) {
 
 export const MOOD_CONFIG = {
   HAPPY:     { emoji: "😀", label: "Happy",     color: "#1baf7a", bg: "#e8f7f0", intensity: 9 },
-  GOOD:      { emoji: "🙂", label: "Good",      color: "#2a78d6", bg: "#e6f1fb", intensity: 7 },
+  GOOD:      { emoji: "😌", label: "Calm",      color: "#2a78d6", bg: "#e6f1fb", intensity: 7 },
   NEUTRAL:   { emoji: "😐", label: "Neutral",   color: "#888780", bg: "#f1efe8", intensity: 5 },
-  SAD:       { emoji: "😞", label: "Sad",       color: "#eda100", bg: "#faeeda", intensity: 3 },
+  SAD:       { emoji: "😔", label: "Sad",       color: "#eda100", bg: "#faeeda", intensity: 3 },
   DEPRESSED: { emoji: "😭", label: "Depressed", color: "#e34948", bg: "#fcebeb", intensity: 1 },
   ANGRY:     { emoji: "😡", label: "Angry",     color: "#d85a30", bg: "#faece7", intensity: 2 },
-  ANXIOUS:   { emoji: "😨", label: "Anxious",   color: "#ba7517", bg: "#faeeda", intensity: 3 },
+  ANXIOUS:   { emoji: "😰", label: "Anxious",   color: "#ba7517", bg: "#faeeda", intensity: 3 },
   EXHAUSTED: { emoji: "😴", label: "Exhausted", color: "#534ab7", bg: "#eeedfe", intensity: 4 },
 } as const;
 
 export type MoodType = keyof typeof MOOD_CONFIG;
+
+// 4 Core Emotions for streamlined mood tracking
+export const ACTIVE_MOODS = ["HAPPY", "GOOD", "SAD", "ANXIOUS"] as const;
+export type ActiveMoodType = (typeof ACTIVE_MOODS)[number];
+
+export const ACTIVE_MOOD_CONFIG: Record<
+  ActiveMoodType,
+  { emoji: string; label: string; description: string; color: string; bg: string; defaultIntensity: number }
+> = {
+  HAPPY: {
+    emoji: "😀",
+    label: "Happy",
+    description: "Joyful, energetic, grateful",
+    color: "#10b981",
+    bg: "#ecfdf5",
+    defaultIntensity: 8,
+  },
+  GOOD: {
+    emoji: "😌",
+    label: "Calm",
+    description: "Peaceful, grounded, at ease",
+    color: "#3b82f6",
+    bg: "#eff6ff",
+    defaultIntensity: 7,
+  },
+  SAD: {
+    emoji: "😔",
+    label: "Sad",
+    description: "Down, gloomy, tearful",
+    color: "#f59e0b",
+    bg: "#fffbeb",
+    defaultIntensity: 3,
+  },
+  ANXIOUS: {
+    emoji: "😰",
+    label: "Anxious",
+    description: "Stressed, nervous, overwhelmed",
+    color: "#ef4444",
+    bg: "#fef2f2",
+    defaultIntensity: 4,
+  },
+};
 
 export function getMoodScore(mood: MoodType): number {
   return MOOD_CONFIG[mood]?.intensity ?? 5;

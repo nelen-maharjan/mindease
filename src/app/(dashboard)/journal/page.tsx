@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MOOD_CONFIG } from "@/lib/utils";
+import { MOOD_CONFIG, ACTIVE_MOODS, ACTIVE_MOOD_CONFIG } from "@/lib/utils";
 import type { MoodType } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Skeleton, Textarea, Label } from "@/components/ui/index";
@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/toaster";
 import type { JournalEntry } from "@/types";
 
 const JOURNAL_TAGS = ["mindfulness", "gratitude", "anxiety", "work", "family", "growth", "reflection", "morning", "evening", "stress", "joy", "health"];
-const MOODS = Object.entries(MOOD_CONFIG) as [MoodType, typeof MOOD_CONFIG[MoodType]][];
+const MOODS = ACTIVE_MOODS.map((k) => [k, ACTIVE_MOOD_CONFIG[k]] as const);
 
 export default function JournalPage() {
   const qc = useQueryClient();
@@ -147,12 +147,23 @@ export default function JournalPage() {
             />
 
             {/* Mood snapshot */}
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               <p className="text-xs text-muted-foreground self-center mr-1">Mood:</p>
               {MOODS.map(([key, c]) => (
-                <button key={key} onClick={() => setMoodSnapshot(key === moodSnapshot ? "" : key)}
-                  className={`text-lg transition-all hover:scale-110 ${moodSnapshot === key ? "scale-110 opacity-100" : "opacity-50"}`}
-                  title={c.label}>{c.emoji}</button>
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMoodSnapshot(key === moodSnapshot ? "" : key)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                    moodSnapshot === key
+                      ? "border-primary bg-primary/10 text-primary shadow-xs scale-105"
+                      : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/70"
+                  }`}
+                  title={c.label}
+                >
+                  <span>{c.emoji}</span>
+                  <span>{c.label}</span>
+                </button>
               ))}
             </div>
 
@@ -249,13 +260,36 @@ export default function JournalPage() {
                       <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                         {entry.content.slice(0, 150)}…
                       </p>
-                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                      <div className="flex gap-1.5 mt-2 flex-wrap items-center">
                         {entry.tags.slice(0, 4).map((t) => (
                           <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
                         ))}
                         {entry.wordCount > 0 && (
                           <Badge variant="outline" className="text-[10px]">{entry.wordCount} words</Badge>
                         )}
+                        {entry.sentimentScore !== null && entry.sentimentScore !== undefined && (
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              entry.sentimentScore > 0.2
+                                ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20"
+                                : entry.sentimentScore < -0.2
+                                ? "border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {entry.sentimentScore > 0.2
+                              ? "Positive"
+                              : entry.sentimentScore < -0.2
+                              ? "Low"
+                              : "Neutral"}
+                          </Badge>
+                        )}
+                        {entry.emotionLabels?.slice(0, 2).map((emo) => (
+                          <Badge key={emo} variant="secondary" className="text-[10px] capitalize">
+                            {emo}
+                          </Badge>
+                        ))}
                         {entry.aiReflection && <Badge className="text-[10px]">✨ Reflected</Badge>}
                       </div>
                     </div>

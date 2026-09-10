@@ -1,22 +1,18 @@
 {
-  "algorithm": "HistGradientBoostingClassifier (TF-IDF + TruncatedSVD/LSA)",
+  "algorithm": "LogisticRegression (TF-IDF)",
   "accuracy": 1.0,
   "macro_f1": 1.0,
-  "n_train": 1568,
-  "n_test": 392,
-  "n_classes": 7,
+  "n_train": 1280,
+  "n_test": 320,
+  "n_classes": 4,
+  "classes": [
+    "anxious",
+    "calm",
+    "happy",
+    "sad"
+  ],
   "per_class": {
-    "angry": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0
-    },
     "anxious": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0
-    },
-    "burnout": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0
@@ -31,16 +27,11 @@
       "recall": 1.0,
       "f1": 1.0
     },
-    "lonely": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1": 1.0
-    },
     "sad": {
       "precision": 1.0,
       "recall": 1.0,
       "f1": 1.0
     }
   },
-  "trained_at": "2026-09-08T16:33:13.013392+00:00"
+  "trained_at": "2026-09-10T15:26:11.691743+00:00"
 }

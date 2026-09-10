@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { wordCount } from "@/lib/utils";
 import { generateJournalReflection } from "@/lib/openai";
+import { analyzeJournalText } from "@/lib/ml";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -48,6 +49,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (updateData.content) {
       updatePayload.wordCount = wordCount(updateData.content);
+      const analysis = await analyzeJournalText(updateData.content);
+      if (analysis) {
+        updatePayload.sentimentScore = analysis.signedScore;
+        updatePayload.emotionLabels = analysis.emotions;
+      }
     }
 
     if (generateReflection) {

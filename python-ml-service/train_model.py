@@ -1,8 +1,9 @@
 """
-Train a Histogram Gradient Boosting mood classifier.
+Train a Logistic Regression mood classifier for MindEase.
 
-Pipeline: TF-IDF (1–2 grams) → TruncatedSVD (LSA) → HistGradientBoostingClassifier
+Pipeline: TF-IDF (1–2 grams) → LogisticRegression
 Also fits IsolationForest for mood-score anomaly detection.
+Supports 4 core emotional states: happy, calm, sad, anxious.
 """
 
 from __future__ import annotations
@@ -14,9 +15,9 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from sklearn.decomposition import TruncatedSVD
-from sklearn.ensemble import HistGradientBoostingClassifier, IsolationForest
+from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -26,7 +27,8 @@ ROOT = Path(__file__).parent
 MODELS = ROOT / "models"
 MODELS.mkdir(exist_ok=True)
 
-MOOD_LABELS = ["happy", "calm", "sad", "angry", "lonely", "burnout", "anxious"]
+# 4 Core Emotions
+MOOD_LABELS = ["happy", "calm", "sad", "anxious"]
 
 TEMPLATES = {
     "happy": [
@@ -38,6 +40,10 @@ TEMPLATES = {
         "Today was amazing. I feel content and motivated to keep going.",
         "I am so thankful. Everything clicked and I feel alive.",
         "A great day overall. I feel warm, light, and really good.",
+        "Accomplished all my goals today and celebrated with friends.",
+        "Woke up with high energy and an optimistic outlook on life.",
+        "Feeling inspired and enthusiastic about working on new projects.",
+        "Such a uplifting and cheerful day. I am smiling non-stop.",
     ],
     "calm": [
         "I feel peaceful and relaxed after a quiet evening at home.",
@@ -48,6 +54,10 @@ TEMPLATES = {
         "The walk outside left me tranquil and clear-headed.",
         "I am breathing easily and feeling quietly content.",
         "I feel safe, stable, and gently optimistic.",
+        "Enjoying the quiet stillness of the afternoon with a warm cup of tea.",
+        "My thoughts are unhurried and my body feels relaxed.",
+        "Taking things one step at a time with a clear, peaceful mind.",
+        "No tension in my shoulders. Just feeling harmonious and tranquil.",
     ],
     "sad": [
         "I feel sad and disappointed about how today unfolded.",
@@ -58,36 +68,10 @@ TEMPLATES = {
         "I am heartbroken and tired of feeling this low.",
         "Nothing feels good. I am gloomy and withdrawn.",
         "I feel like a failure and it hurts more than I expected.",
-    ],
-    "angry": [
-        "I am furious about how I was treated and I cannot let it go.",
-        "I feel irritated, resentful, and ready to snap.",
-        "This made me so mad. I am angry and tense.",
-        "I am frustrated with the unfairness of it all.",
-        "My blood is boiling. I feel hostile and bitter.",
-        "I snapped at someone because I was livid.",
-        "I keep replaying the argument and feeling rage.",
-        "I am annoyed at every small thing today.",
-    ],
-    "lonely": [
         "I feel lonely and disconnected from everyone I care about.",
-        "I am isolated, even in a crowded room.",
-        "Nobody reached out. I feel alone and unseen.",
-        "I miss people. The silence feels heavy and empty.",
-        "I feel abandoned and like I do not belong.",
-        "I want connection but I am too withdrawn to ask.",
-        "The apartment is too quiet. I feel cut off.",
-        "I scrolled for hours and still felt invisible.",
-    ],
-    "burnout": [
-        "I am exhausted, overloaded, and completely drained.",
-        "Work keeps piling up. I feel frazzled and on the edge of burnout.",
-        "I am overwhelmed by deadlines and cannot catch my breath.",
-        "I feel burned out, tense, and too busy to rest.",
-        "My energy is gone. Even small tasks feel hectic and rushed.",
-        "I am overworked and my body is begging me to stop.",
-        "I have nothing left to give. I am depleted.",
-        "The pressure never lets up and I am running on empty.",
+        "Nobody reached out today. The silence feels heavy and empty.",
+        "Feeling gloomy, fatigued, and lacking motivation to do anything.",
+        "Deep sadness and tearful thoughts keep pulling my spirits down.",
     ],
     "anxious": [
         "I feel anxious and keep overthinking every possible outcome.",
@@ -97,7 +81,11 @@ TEMPLATES = {
         "I am apprehensive and fidgety about things I cannot control.",
         "My thoughts race. I feel scared that I will mess this up.",
         "I keep checking my phone. The uncertainty is unbearable.",
-        "I am on edge and bracing for something bad.",
+        "I am on edge and bracing for something bad to happen.",
+        "I am exhausted, overloaded, and completely burned out with stress.",
+        "Work keeps piling up. I feel frantic, panicked, and overwhelmed.",
+        "Tension headaches and racing heartbeat from all the pressure.",
+        "Constantly on edge, unable to breathe deeply or slow my mind down.",
     ],
 }
 
@@ -111,11 +99,12 @@ FILLERS = [
     " This is just how the afternoon felt.",
     " I will check in again tomorrow.",
     " I keep returning to this feeling.",
+    " Sitting alone with these thoughts right now.",
     "",
 ]
 
 
-def build_corpus(n_per_class: int = 280, seed: int = 42) -> tuple[list[str], list[str]]:
+def build_corpus(n_per_class: int = 350, seed: int = 42) -> tuple[list[str], list[str]]:
     rng = random.Random(seed)
     texts: list[str] = []
     labels: list[str] = []
@@ -124,18 +113,21 @@ def build_corpus(n_per_class: int = 280, seed: int = 42) -> tuple[list[str], lis
             base = rng.choice(templates)
             extra = rng.choice(FILLERS)
             noise = rng.choice(FILLERS)
-            # Light paraphrase via word order / repetition
-            if rng.random() < 0.35:
+            # Paraphrase via phrasing / context tags
+            if rng.random() < 0.40:
                 base = base.replace("I feel", "I have been feeling")
             if rng.random() < 0.25:
-                extra = extra + " " + rng.choice(["Work", "Family", "Sleep", "Health"]).lower() + " is on my mind."
+                base = base.replace("I am", "I'm feeling completely")
+            if rng.random() < 0.30:
+                topic = rng.choice(["Work", "Family", "Sleep", "Health", "Relationships", "Finances"]).lower()
+                extra = extra + f" {topic} is on my mind."
             texts.append((base + extra + noise).strip())
             labels.append(label)
     return texts, labels
 
 
 def train() -> dict:
-    texts, labels = build_corpus()
+    texts, labels = build_corpus(n_per_class=400)
     encoder = LabelEncoder()
     y = encoder.fit_transform(labels)
 
@@ -151,18 +143,16 @@ def train() -> dict:
                     lowercase=True,
                     ngram_range=(1, 2),
                     min_df=2,
-                    max_features=6000,
+                    max_features=8000,
                     sublinear_tf=True,
                 ),
             ),
-            ("svd", TruncatedSVD(n_components=120, random_state=42)),
             (
                 "clf",
-                HistGradientBoostingClassifier(
-                    max_depth=6,
-                    max_iter=180,
-                    learning_rate=0.08,
-                    l2_regularization=0.1,
+                LogisticRegression(
+                    C=1.0,
+                    max_iter=1000,
+                    solver="lbfgs",
                     random_state=42,
                 ),
             ),
@@ -190,31 +180,39 @@ def train() -> dict:
         }
 
     metrics = {
-        "algorithm": "HistGradientBoostingClassifier (TF-IDF + TruncatedSVD/LSA)",
+        "algorithm": "LogisticRegression (TF-IDF)",
         "accuracy": round(report["accuracy"], 4),
         "macro_f1": round(f1_score(y_test, y_pred, average="macro"), 4),
         "n_train": int(len(X_train)),
         "n_test": int(len(X_test)),
         "n_classes": int(len(encoder.classes_)),
+        "classes": list(encoder.classes_),
         "per_class": per_class,
         "trained_at": datetime.now(timezone.utc).isoformat(),
     }
 
     # Isolation Forest on synthetic mood scores for anomaly detection
     rng = np.random.default_rng(42)
-    typical = rng.normal(6.2, 1.1, size=800)
-    iso = IsolationForest(contamination=0.08, random_state=42)
+    typical = rng.normal(6.5, 1.2, size=1000)
+    iso = IsolationForest(contamination=0.07, random_state=42)
     iso.fit(typical.reshape(-1, 1))
 
-    joblib.dump(
-        {"pipeline": pipeline, "encoder": encoder, "isolation_forest": iso, "metrics": metrics},
-        MODELS / "mood_hgb.joblib",
-    )
+    bundle = {
+        "pipeline": pipeline,
+        "encoder": encoder,
+        "isolation_forest": iso,
+        "metrics": metrics,
+    }
+
+    # Save to both mood_classifier.joblib and mood_hgb.joblib for seamless backwards-compatibility
+    joblib.dump(bundle, MODELS / "mood_classifier.joblib")
+    joblib.dump(bundle, MODELS / "mood_hgb.joblib")
     (MODELS / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     return metrics
 
 
 if __name__ == "__main__":
     result = train()
-    print("Saved", MODELS / "mood_hgb.joblib")
-    print("Accuracy", result["accuracy"], "macro F1", result["macro_f1"])
+    print("Saved mood_classifier.joblib and metrics.json")
+    print("Algorithm:", result["algorithm"])
+    print("Accuracy:", result["accuracy"], "macro F1:", result["macro_f1"])

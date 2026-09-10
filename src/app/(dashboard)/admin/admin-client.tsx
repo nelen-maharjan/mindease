@@ -162,7 +162,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
           <div>
             <CardTitle>Wellness ML model</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Histogram Gradient Boosting on TF-IDF + LSA features
+              Logistic Regression with TF-IDF & Isolation Forest Anomaly Detection
             </p>
           </div>
           <Button
