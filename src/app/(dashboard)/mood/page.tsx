@@ -27,7 +27,9 @@ export default function MoodPage() {
   const [mlPrediction, setMlPrediction] = useState<{
     label: string;
     confidence: number;
-    mappedMood: ActiveMoodType;
+    probabilities?: Record<string, number>;
+    isUncertain?: boolean;
+    mappedMood: ActiveMoodType | null;
   } | null>(null);
   const [isClassifying, setIsClassifying] = useState(false);
 
@@ -106,10 +108,18 @@ export default function MoodPage() {
         throw new Error(data.error || "Failed to analyze mood");
       }
       setMlPrediction(data.data);
-      toast({
-        title: `ML detected: ${data.data.label} (${Math.round(data.data.confidence * 100)}% confidence)`,
-        type: "info",
-      });
+      if (data.data.isUncertain) {
+        toast({
+          title: `Mood is uncertain (${Math.round(data.data.confidence * 100)}% confidence)`,
+          description: "Add a bit more detail, or select your mood directly.",
+          type: "info",
+        });
+      } else {
+        toast({
+          title: `ML detected: ${data.data.label} (${Math.round(data.data.confidence * 100)}% confidence)`,
+          type: "success",
+        });
+      }
     } catch {
       toast({ title: "Could not connect to ML service", type: "error" });
     } finally {
@@ -118,7 +128,7 @@ export default function MoodPage() {
   };
 
   const applyPrediction = () => {
-    if (!mlPrediction) return;
+    if (!mlPrediction || !mlPrediction.mappedMood) return;
     handleMoodSelect(mlPrediction.mappedMood);
     toast({
       title: `Applied ${ACTIVE_MOOD_CONFIG[mlPrediction.mappedMood].label} mood from ML analysis!`,
@@ -282,28 +292,42 @@ export default function MoodPage() {
               rows={3}
             />
 
-            {/* ML Prediction Badge / Quick Apply */}
+            {/* ML Prediction Badge / Quick Apply / Uncertain State */}
             {mlPrediction && (
-              <div className="mt-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0" />
-                  <span>
-                    ML Logistic Regression detected:{" "}
-                    <strong className="capitalize text-primary">{mlPrediction.label}</strong> (
-                    {Math.round(mlPrediction.confidence * 100)}% confidence)
-                  </span>
+              mlPrediction.isUncertain || !mlPrediction.mappedMood ? (
+                <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5 text-xs text-muted-foreground">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-foreground">
+                      Mood detection is uncertain ({Math.round(mlPrediction.confidence * 100)}% confidence)
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      Emotional expressions can be complex or nuanced. You can add more details to your notes, or select your mood directly from the cards above.
+                    </p>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="default"
-                  onClick={applyPrediction}
-                  className="shrink-0 text-xs"
-                >
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Apply {ACTIVE_MOOD_CONFIG[mlPrediction.mappedMood]?.label}
-                </Button>
-              </div>
+              ) : (
+                <div className="mt-2 p-2.5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                    <span>
+                      ML detected:{" "}
+                      <strong className="capitalize text-primary">{mlPrediction.label}</strong> (
+                      {Math.round(mlPrediction.confidence * 100)}% confidence)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="default"
+                    onClick={applyPrediction}
+                    className="shrink-0 text-xs"
+                  >
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Apply {ACTIVE_MOOD_CONFIG[mlPrediction.mappedMood]?.label}
+                  </Button>
+                </div>
+              )
             )}
           </div>
 

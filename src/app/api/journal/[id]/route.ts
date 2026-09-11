@@ -57,9 +57,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (generateReflection) {
-      const content = updateData.content || existing.content;
-      const reflection = await generateJournalReflection(content);
-      updatePayload.aiReflection = reflection;
+      try {
+        const content = updateData.content || existing.content;
+        const reflection = await generateJournalReflection(content);
+        updatePayload.aiReflection = reflection;
+      } catch (e) {
+        console.warn("Could not generate reflection, skipping:", e);
+      }
     }
 
     const entry = await prisma.journalEntry.update({

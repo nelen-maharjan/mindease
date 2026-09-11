@@ -34,12 +34,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mappedMood = LABEL_TO_MOOD[result.label.toLowerCase()] || "GOOD";
+    const isUncertain = Boolean(result.isUncertain || result.label.toLowerCase() === "uncertain");
+    const mappedMood = isUncertain ? null : (LABEL_TO_MOOD[result.label.toLowerCase()] || null);
 
     return NextResponse.json({
       data: {
         label: result.label,
         confidence: result.confidence,
+        probabilities: result.probabilities || {},
+        isUncertain,
         mappedMood,
       },
     });

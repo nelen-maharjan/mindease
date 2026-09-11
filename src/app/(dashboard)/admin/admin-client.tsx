@@ -100,9 +100,17 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
   const metrics = (mlInfo?.metrics || {}) as {
     accuracy?: number;
     macro_f1?: number;
+    weighted_f1?: number;
+    cv_mean_macro_f1?: number;
+    cv_std_macro_f1?: number;
+    cv_scores?: number[];
+    best_params?: { C?: number; ngram_range?: number[]; min_df?: number };
+    confusion_matrix?: number[][];
+    classes?: string[];
     n_train?: number;
     n_test?: number;
-    per_class?: Record<string, { precision?: number; recall?: number; f1?: number }>;
+    n_total?: number;
+    per_class?: Record<string, { precision?: number; recall?: number; f1?: number; support?: number }>;
   };
 
   return (
@@ -162,7 +170,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
           <div>
             <CardTitle>Wellness ML model</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Logistic Regression with TF-IDF & Isolation Forest Anomaly Detection
+              Regularized Logistic Regression with TF-IDF, 5-Fold Stratified Cross-Validation & Statistical Anomaly Detection
             </p>
           </div>
           <Button
@@ -173,46 +181,106 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
             {trainMutation.isPending ? "Training…" : "Retrain"}
           </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Badge variant={mlInfo?.loaded ? "success" : "warning"}>
               {mlInfo?.loaded ? "Model loaded" : mlInfo?.status || "Offline"}
             </Badge>
             {mlInfo?.algorithm && <Badge variant="wellness">{mlInfo.algorithm}</Badge>}
+            {metrics.best_params && (
+              <Badge variant="outline" className="text-xs">
+                C={metrics.best_params.C} · n-grams={metrics.best_params.ngram_range?.join("-")}
+              </Badge>
+            )}
             {mlInfo?.trainedAt && (
               <Badge variant="outline">Trained {format(new Date(mlInfo.trainedAt), "MMM d, yyyy HH:mm")}</Badge>
             )}
           </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Kpi label="Accuracy" value={pct(metrics.accuracy)} />
-            <Kpi label="Macro F1" value={pct(metrics.macro_f1)} />
-            <Kpi label="Train samples" value={metrics.n_train ?? "—"} />
-            <Kpi label="Test samples" value={metrics.n_test ?? "—"} />
+            <Kpi label="Test accuracy" value={pct(metrics.accuracy)} />
+            <Kpi label="Test macro F1" value={pct(metrics.macro_f1)} />
+            <Kpi
+              label="5-fold CV F1"
+              value={metrics.cv_mean_macro_f1 != null ? pct(metrics.cv_mean_macro_f1) : "—"}
+            />
+            <Kpi
+              label="Samples"
+              value={metrics.n_total != null ? `${metrics.n_total} (${metrics.n_test} test)` : "—"}
+            />
           </div>
+
           {metrics.per_class && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">Class</th>
-                    <th className="py-2 pr-3 font-medium">Precision</th>
-                    <th className="py-2 pr-3 font-medium">Recall</th>
-                    <th className="py-2 font-medium">F1</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(metrics.per_class).map(([label, row]) => (
-                    <tr key={label} className="border-t border-border">
-                      <td className="py-2 pr-3 capitalize">{label}</td>
-                      <td className="py-2 pr-3">{pct(row.precision)}</td>
-                      <td className="py-2 pr-3">{pct(row.recall)}</td>
-                      <td className="py-2">{pct(row.f1)}</td>
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Per-Class Performance</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-muted-foreground border-b border-border">
+                      <th className="py-2 pr-3 font-medium">Class</th>
+                      <th className="py-2 pr-3 font-medium">Precision</th>
+                      <th className="py-2 pr-3 font-medium">Recall</th>
+                      <th className="py-2 pr-3 font-medium">F1-Score</th>
+                      <th className="py-2 font-medium">Test Support</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {Object.entries(metrics.per_class).map(([label, row]) => (
+                      <tr key={label} className="border-b border-border/50">
+                        <td className="py-2 pr-3 capitalize font-medium">{label}</td>
+                        <td className="py-2 pr-3">{pct(row.precision)}</td>
+                        <td className="py-2 pr-3">{pct(row.recall)}</td>
+                        <td className="py-2 pr-3 font-medium">{pct(row.f1)}</td>
+                        <td className="py-2 text-muted-foreground">{row.support ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+
+          {metrics.confusion_matrix && metrics.classes && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Confusion Matrix (Holdout Test)</p>
+              <div className="overflow-x-auto">
+                <table className="text-xs text-center border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="p-1.5 text-left text-muted-foreground font-medium">Actual \ Pred</th>
+                      {metrics.classes.map((cls) => (
+                        <th key={cls} className="p-1.5 capitalize font-medium text-foreground min-w-16">
+                          {cls}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.classes.map((actualCls, rIdx) => (
+                      <tr key={actualCls} className="border-t border-border/50">
+                        <td className="p-1.5 text-left font-medium capitalize text-muted-foreground">{actualCls}</td>
+                        {metrics.confusion_matrix![rIdx]?.map((val, cIdx) => (
+                          <td
+                            key={cIdx}
+                            className={`p-1.5 font-mono ${
+                              rIdx === cIdx
+                                ? "bg-primary/15 font-semibold text-primary"
+                                : val > 0
+                                ? "bg-destructive/15 text-destructive font-medium"
+                                : "text-muted-foreground/60"
+                            }`}
+                          >
+                            {val}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {mlInfo?.error && <p className="text-sm text-destructive">{mlInfo.error}</p>}
           {trainMutation.isError && (
             <p className="text-sm text-destructive">{(trainMutation.error as Error).message}</p>

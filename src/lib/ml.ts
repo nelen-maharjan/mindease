@@ -17,8 +17,10 @@ export type ModelInfo = {
 };
 
 export type MoodClassificationResult = {
-  label: "happy" | "calm" | "sad" | "anxious" | string;
+  label: "happy" | "calm" | "sad" | "anxious" | "uncertain" | string;
   confidence: number;
+  probabilities?: Record<string, number>;
+  isUncertain?: boolean;
 };
 
 export type TrendAnalysisResult = {
@@ -83,6 +85,8 @@ export async function classifyMood(text: string): Promise<MoodClassificationResu
     return {
       label: data.label,
       confidence: data.confidence,
+      probabilities: data.probabilities || {},
+      isUncertain: Boolean(data.is_uncertain),
     };
   } catch {
     return null;
