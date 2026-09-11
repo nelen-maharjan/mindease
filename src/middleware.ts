@@ -1,42 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 
-// Routes that require authentication
-const PROTECTED_PREFIXES = ["/dashboard", "/mood", "/journal", "/chat", "/habits", "/goals", "/analytics", "/recommendations", "/settings", "/admin"];
-// Routes accessible only to guests
+const PROTECTED_PREFIXES = [
+"/dashboard",
+"/mood",
+"/journal",
+"/chat",
+"/habits",
+"/goals",
+"/analytics",
+"/recommendations",
+"/settings",
+"/admin",
+];
+
 const AUTH_ROUTES = ["/login", "/register"];
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export function middleware(request: NextRequest) {
+const { pathname } = request.nextUrl;
 
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-  const isAuthRoute = AUTH_ROUTES.some((p) => pathname.startsWith(p));
+const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+pathname.startsWith(prefix)
+);
 
-  if (!isProtected && !isAuthRoute) return NextResponse.next();
+const isAuthRoute = AUTH_ROUTES.some((prefix) =>
+pathname.startsWith(prefix)
+);
 
-  try {
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+if (!isProtected && !isAuthRoute) {
+return NextResponse.next();
+}
 
-    if (isProtected && !session) {
-      const url = new URL("/login", request.url);
-      url.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(url);
-    }
+const sessionCookie =
+request.cookies.get("better-auth.session_token") ??
+request.cookies.get("__Secure-better-auth.session_token");
 
-    if (isAuthRoute && session) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
-  } catch {
-    if (isProtected) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
+const hasSession = Boolean(sessionCookie);
 
-  return NextResponse.next();
+if (isProtected && !hasSession) {
+const url = new URL("/login", request.url);
+url.searchParams.set("callbackUrl", pathname);
+
+return NextResponse.redirect(url);
+
+
+}
+
+if (isAuthRoute && hasSession) {
+return NextResponse.redirect(new URL("/dashboard", request.url));
+}
+
+return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+matcher: [
+"/dashboard/:path*",
+"/mood/:path*",
+"/journal/:path*",
+"/chat/:path*",
+"/habits/:path*",
+"/goals/:path*",
+"/analytics/:path*",
+"/recommendations/:path*",
+"/settings/:path*",
+"/admin/:path*",
+"/login",
+"/register",
+],
 };
