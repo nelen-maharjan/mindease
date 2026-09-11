@@ -337,13 +337,14 @@ model AiInsight {
 
 // ─── Crisis Flags ─────────────────────────────────────────────────
 model CrisisFlag {
-  id           String   @id @default(cuid())
-  userId       String
-  messageId    String?
-  severity     String   // "low", "medium", "high"
-  triggerWords String[]
-  resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
+  id             String    @id @default(cuid())
+  userId         String
+  messageId      String?
+  severity       String    // "low", "medium", "high"
+  triggerWords   String[]
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

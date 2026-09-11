@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMemo, useState } from "react";
+import { Download, ChevronLeft, ChevronRight } from "lucide-react";
 
 const MOOD_COLORS: Record<string, string> = {
   HAPPY: "#1baf7a", GOOD: "#2a78d6", NEUTRAL: "#888780",
@@ -16,30 +17,55 @@ const MOOD_COLORS: Record<string, string> = {
   ANXIOUS: "#ba7517", EXHAUSTED: "#534ab7",
 };
 
+type RoleFilter = "all" | "USER" | "ADMIN";
+type CrisisStatus = "all" | "open" | "resolved";
+type CrisisSeverity = "all" | "high" | "medium" | "low";
+
 export function AdminDashboardClient({ adminName }: { adminName: string }) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
 
+  // ─── Users state ──────────────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [userPage, setUserPage] = useState(1);
+
+  // ─── Crisis state ─────────────────────────────────────────────────
+  const [crisisStatus, setCrisisStatus] = useState<CrisisStatus>("open");
+  const [crisisSeverity, setCrisisSeverity] = useState<CrisisSeverity>("all");
+  const [crisisPage, setCrisisPage] = useState(1);
+  const [resolutionNote, setResolutionNote] = useState<Record<string, string>>({});
+  const [showNoteFor, setShowNoteFor] = useState<string | null>(null);
+
+  // ─── Queries ──────────────────────────────────────────────────────
   const stats = useQuery({
     queryKey: ["admin-stats"],
     queryFn: async () => (await fetch("/api/admin/stats")).json(),
   });
-  const users = useQuery({
-    queryKey: ["admin-users", search],
+
+  const usersQuery = useQuery({
+    queryKey: ["admin-users", search, roleFilter, userPage],
     queryFn: async () => {
-      const q = search ? `?search=${encodeURIComponent(search)}` : "";
-      return (await fetch(`/api/admin/users${q}`)).json();
+      const params = new URLSearchParams({ page: String(userPage), limit: "15" });
+      if (search) params.set("search", search);
+      if (roleFilter !== "all") params.set("role", roleFilter);
+      return (await fetch(`/api/admin/users?${params}`)).json();
     },
   });
-  const crisis = useQuery({
-    queryKey: ["admin-crisis"],
-    queryFn: async () => (await fetch("/api/admin/crisis")).json(),
+
+  const crisisQuery = useQuery({
+    queryKey: ["admin-crisis", crisisStatus, crisisSeverity, crisisPage],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(crisisPage), limit: "15", status: crisisStatus, severity: crisisSeverity });
+      return (await fetch(`/api/admin/crisis?${params}`)).json();
+    },
   });
+
   const ml = useQuery({
     queryKey: ["admin-ml"],
     queryFn: async () => (await fetch("/api/admin/ml")).json(),
   });
 
+  // ─── Mutations ────────────────────────────────────────────────────
   const roleMutation = useMutation({
     mutationFn: async (payload: { userId: string; role: "USER" | "ADMIN" }) => {
       const r = await fetch("/api/admin/users", {
@@ -57,7 +83,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: async (payload: { id: string; resolved: boolean }) => {
+    mutationFn: async (payload: { id: string; resolved: boolean; resolutionNote?: string }) => {
       const r = await fetch("/api/admin/crisis", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -66,9 +92,11 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
       if (!r.ok) throw new Error("Failed to update flag");
       return r.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["admin-crisis"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      setShowNoteFor(null);
+      setResolutionNote((prev) => { const n = { ...prev }; delete n[vars.id]; return n; });
     },
   });
 
@@ -82,6 +110,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-ml"] }),
   });
 
+  // ─── Derived data ─────────────────────────────────────────────────
   const kpis = stats.data?.data?.kpis;
   const moodDistribution = useMemo(
     () =>
@@ -98,19 +127,35 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
   }));
   const mlInfo = ml.data?.data;
   const metrics = (mlInfo?.metrics || {}) as {
-    accuracy?: number;
-    macro_f1?: number;
-    weighted_f1?: number;
-    cv_mean_macro_f1?: number;
-    cv_std_macro_f1?: number;
-    cv_scores?: number[];
+    accuracy?: number; macro_f1?: number; weighted_f1?: number;
+    cv_mean_macro_f1?: number; cv_std_macro_f1?: number; cv_scores?: number[];
     best_params?: { C?: number; ngram_range?: number[]; min_df?: number };
-    confusion_matrix?: number[][];
-    classes?: string[];
-    n_train?: number;
-    n_test?: number;
-    n_total?: number;
+    confusion_matrix?: number[][]; classes?: string[];
+    n_train?: number; n_test?: number; n_total?: number;
     per_class?: Record<string, { precision?: number; recall?: number; f1?: number; support?: number }>;
+  };
+
+  const usersMeta = usersQuery.data?.meta as { total: number; pages: number } | undefined;
+  const crisisMeta = crisisQuery.data?.meta as { total: number; pages: number } | undefined;
+
+  // ─── Export handlers ──────────────────────────────────────────────
+  const exportUsers = () => {
+    const rows = usersQuery.data?.data || [];
+    const csv = [
+      ["ID", "Name", "Email", "Role", "Joined", "Mood Logs", "Journals", "Goals", "Crisis Flags"].join(","),
+      ...rows.map((u: {
+        id: string; name: string | null; email: string; role: string; createdAt: string;
+        _count: { moodLogs: number; journalEntries: number; goals: number; crisisFlags: number };
+      }) =>
+        [u.id, `"${u.name || ""}"`, u.email, u.role, u.createdAt.split("T")[0],
+          u._count.moodLogs, u._count.journalEntries, u._count.goals, u._count.crisisFlags].join(",")
+      ),
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `mindease-users-${new Date().toISOString().split("T")[0]}.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -122,6 +167,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
         </p>
       </div>
 
+      {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Users" value={kpis?.users ?? "—"} />
         <Kpi label="Mood logs" value={kpis?.moodLogs ?? "—"} />
@@ -129,6 +175,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
         <Kpi label="Open crisis flags" value={kpis?.openCrisis ?? "—"} alert={(kpis?.openCrisis ?? 0) > 0} />
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Signups — last 30 days</CardTitle></CardHeader>
@@ -165,19 +212,16 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
         </Card>
       </div>
 
+      {/* ML Model */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Wellness ML model</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Regularized Logistic Regression with TF-IDF, 5-Fold Stratified Cross-Validation & Statistical Anomaly Detection
+              Regularized Logistic Regression with TF-IDF, 5-Fold Stratified Cross-Validation &amp; Statistical Anomaly Detection
             </p>
           </div>
-          <Button
-            size="sm"
-            onClick={() => trainMutation.mutate()}
-            disabled={trainMutation.isPending}
-          >
+          <Button size="sm" onClick={() => trainMutation.mutate()} disabled={trainMutation.isPending}>
             {trainMutation.isPending ? "Training…" : "Retrain"}
           </Button>
         </CardHeader>
@@ -200,14 +244,8 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Kpi label="Test accuracy" value={pct(metrics.accuracy)} />
             <Kpi label="Test macro F1" value={pct(metrics.macro_f1)} />
-            <Kpi
-              label="5-fold CV F1"
-              value={metrics.cv_mean_macro_f1 != null ? pct(metrics.cv_mean_macro_f1) : "—"}
-            />
-            <Kpi
-              label="Samples"
-              value={metrics.n_total != null ? `${metrics.n_total} (${metrics.n_test} test)` : "—"}
-            />
+            <Kpi label="5-fold CV F1" value={metrics.cv_mean_macro_f1 != null ? pct(metrics.cv_mean_macro_f1) : "—"} />
+            <Kpi label="Samples" value={metrics.n_total != null ? `${metrics.n_total} (${metrics.n_test} test)` : "—"} />
           </div>
 
           {metrics.per_class && (
@@ -249,9 +287,7 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
                     <tr>
                       <th className="p-1.5 text-left text-muted-foreground font-medium">Actual \ Pred</th>
                       {metrics.classes.map((cls) => (
-                        <th key={cls} className="p-1.5 capitalize font-medium text-foreground min-w-16">
-                          {cls}
-                        </th>
+                        <th key={cls} className="p-1.5 capitalize font-medium text-foreground min-w-16">{cls}</th>
                       ))}
                     </tr>
                   </thead>
@@ -262,12 +298,11 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
                         {metrics.confusion_matrix![rIdx]?.map((val, cIdx) => (
                           <td
                             key={cIdx}
-                            className={`p-1.5 font-mono ${
-                              rIdx === cIdx
-                                ? "bg-primary/15 font-semibold text-primary"
-                                : val > 0
-                                ? "bg-destructive/15 text-destructive font-medium"
-                                : "text-muted-foreground/60"
+                            className={`p-1.5 font-mono ${rIdx === cIdx
+                              ? "bg-primary/15 font-semibold text-primary"
+                              : val > 0
+                              ? "bg-destructive/15 text-destructive font-medium"
+                              : "text-muted-foreground/60"
                             }`}
                           >
                             {val}
@@ -288,77 +323,219 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
         </CardContent>
       </Card>
 
+      {/* Users & Crisis side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* ─── Users ─────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <Input
-              className="mt-3"
-              placeholder="Search name or email"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <div className="flex items-center justify-between">
+              <CardTitle>Users</CardTitle>
+              <Button size="xs" variant="outline" onClick={exportUsers} title="Export CSV">
+                <Download className="size-3.5 mr-1" />CSV
+              </Button>
+            </div>
+            <div className="mt-3 space-y-2">
+              <Input
+                placeholder="Search name or email"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setUserPage(1); }}
+              />
+              <div className="flex gap-1">
+                {(["all", "USER", "ADMIN"] as RoleFilter[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => { setRoleFilter(r); setUserPage(1); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${roleFilter === r
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {r === "all" ? `All (${usersMeta?.total ?? "—"})` : r}
+                  </button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {(users.data?.data || []).map((u: {
+            {usersQuery.isLoading && <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>}
+            {(usersQuery.data?.data || []).map((u: {
               id: string; name: string | null; email: string; role: string;
-              createdAt: string; _count: { moodLogs: number; journalEntries: number; crisisFlags: number };
+              createdAt: string; _count: { moodLogs: number; journalEntries: number; goals: number; crisisFlags: number };
             }) => (
-              <div key={u.id} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+              <div key={u.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{u.name || "Unnamed"}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {u.email} · {u._count.moodLogs} moods · {u._count.journalEntries} journals
+                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {u._count.moodLogs} moods · {u._count.journalEntries} journals · {u._count.goals} goals
+                    {u._count.crisisFlags > 0 && (
+                      <span className="ml-1 text-destructive font-medium">· {u._count.crisisFlags} crisis</span>
+                    )}
                   </p>
+                  <p className="text-xs text-muted-foreground/60">Joined {format(new Date(u.createdAt), "MMM d, yyyy")}</p>
                 </div>
-                <Badge variant={u.role === "ADMIN" ? "wellness" : "secondary"}>{u.role}</Badge>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={roleMutation.isPending}
-                  onClick={() =>
-                    roleMutation.mutate({
-                      userId: u.id,
-                      role: u.role === "ADMIN" ? "USER" : "ADMIN",
-                    })
-                  }
-                >
-                  {u.role === "ADMIN" ? "Demote" : "Promote"}
-                </Button>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <Badge variant={u.role === "ADMIN" ? "wellness" : "secondary"}>{u.role}</Badge>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={roleMutation.isPending}
+                    onClick={() => roleMutation.mutate({ userId: u.id, role: u.role === "ADMIN" ? "USER" : "ADMIN" })}
+                  >
+                    {u.role === "ADMIN" ? "Demote" : "Promote"}
+                  </Button>
+                </div>
               </div>
             ))}
+
+            {/* Pagination */}
+            {usersMeta && usersMeta.pages > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Page {userPage} of {usersMeta.pages} · {usersMeta.total} total
+                </p>
+                <div className="flex gap-1">
+                  <Button size="xs" variant="outline" disabled={userPage <= 1} onClick={() => setUserPage((p) => p - 1)}>
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <Button size="xs" variant="outline" disabled={userPage >= usersMeta.pages} onClick={() => setUserPage((p) => p + 1)}>
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* ─── Crisis Flags ───────────────────────────────────────── */}
         <Card>
-          <CardHeader><CardTitle>Crisis flags</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Crisis flags</CardTitle>
+            <div className="mt-3 space-y-2">
+              {/* Status filter */}
+              <div className="flex gap-1">
+                {(["open", "all", "resolved"] as CrisisStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setCrisisStatus(s); setCrisisPage(1); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors capitalize ${crisisStatus === s
+                      ? s === "open" ? "bg-destructive text-destructive-foreground"
+                        : s === "resolved" ? "bg-emerald-600 text-white"
+                        : "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {s} {s === "all" && crisisMeta ? `(${crisisMeta.total})` : ""}
+                  </button>
+                ))}
+              </div>
+              {/* Severity filter */}
+              <div className="flex gap-1">
+                {(["all", "high", "medium", "low"] as CrisisSeverity[]).map((sv) => (
+                  <button
+                    key={sv}
+                    onClick={() => { setCrisisSeverity(sv); setCrisisPage(1); }}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors capitalize ${crisisSeverity === sv
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {sv}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
           <CardContent className="space-y-2">
-            {(crisis.data?.data || []).length === 0 && (
-              <p className="text-sm text-muted-foreground py-6 text-center">No crisis flags recorded</p>
+            {crisisQuery.isLoading && <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>}
+            {!crisisQuery.isLoading && (crisisQuery.data?.data || []).length === 0 && (
+              <p className="text-sm text-muted-foreground py-6 text-center">No crisis flags for this filter</p>
             )}
-            {(crisis.data?.data || []).map((flag: {
+            {(crisisQuery.data?.data || []).map((flag: {
               id: string; severity: string; triggerWords: string[]; resolvedAt: string | null;
-              createdAt: string; user: { name: string | null; email: string };
+              resolutionNote: string | null; createdAt: string;
+              user: { name: string | null; email: string };
             }) => (
-              <div key={flag.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{flag.user.name || flag.user.email}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {flag.severity} · {flag.triggerWords.join(", ") || "no triggers"} · {format(new Date(flag.createdAt), "MMM d")}
-                  </p>
+              <div key={flag.id} className="py-2 border-b border-border last:border-0 space-y-1.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{flag.user.name || flag.user.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(flag.createdAt), "MMM d, HH:mm")}
+                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      <Badge
+                        variant={flag.severity === "high" ? "destructive" : flag.severity === "medium" ? "warning" : "secondary"}
+                        className="text-xs"
+                      >
+                        {flag.severity}
+                      </Badge>
+                      {flag.triggerWords.slice(0, 3).map((w) => (
+                        <span key={w} className="text-xs bg-muted px-1.5 py-0.5 rounded">{w}</span>
+                      ))}
+                    </div>
+                    {flag.resolutionNote && (
+                      <p className="text-xs text-muted-foreground mt-1 italic">"{flag.resolutionNote}"</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <Badge variant={flag.resolvedAt ? "success" : "destructive"}>
+                      {flag.resolvedAt ? "Resolved" : "Open"}
+                    </Badge>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setShowNoteFor(showNoteFor === flag.id ? null : flag.id)}
+                    >
+                      {flag.resolvedAt ? "Reopen" : "Resolve"}
+                    </Button>
+                  </div>
                 </div>
-                <Badge variant={flag.resolvedAt ? "success" : "destructive"}>
-                  {flag.resolvedAt ? "Resolved" : "Open"}
-                </Badge>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  onClick={() => resolveMutation.mutate({ id: flag.id, resolved: !flag.resolvedAt })}
-                >
-                  {flag.resolvedAt ? "Reopen" : "Resolve"}
-                </Button>
+
+                {/* Resolution note inline form */}
+                {showNoteFor === flag.id && (
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      className="text-xs h-7"
+                      placeholder={flag.resolvedAt ? "Reason to reopen…" : "Resolution note (optional)…"}
+                      value={resolutionNote[flag.id] || ""}
+                      onChange={(e) => setResolutionNote((prev) => ({ ...prev, [flag.id]: e.target.value }))}
+                    />
+                    <Button
+                      size="xs"
+                      disabled={resolveMutation.isPending}
+                      onClick={() =>
+                        resolveMutation.mutate({
+                          id: flag.id,
+                          resolved: !flag.resolvedAt,
+                          resolutionNote: resolutionNote[flag.id] || undefined,
+                        })
+                      }
+                    >
+                      Confirm
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* Pagination */}
+            {crisisMeta && crisisMeta.pages > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Page {crisisPage} of {crisisMeta.pages} · {crisisMeta.total} total
+                </p>
+                <div className="flex gap-1">
+                  <Button size="xs" variant="outline" disabled={crisisPage <= 1} onClick={() => setCrisisPage((p) => p - 1)}>
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <Button size="xs" variant="outline" disabled={crisisPage >= crisisMeta.pages} onClick={() => setCrisisPage((p) => p + 1)}>
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
