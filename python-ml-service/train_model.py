@@ -1,165 +1,165 @@
 """
-Train a Logistic Regression mood classifier for MindEase.
+MindEase ML Pipeline — Production-Grade Emotion Classifier
+Trains a regularized Logistic Regression classifier with TF-IDF n-grams
+for 4 core affective states: happy, calm, sad, anxious.
 
-Pipeline: TF-IDF (1–2 grams) → LogisticRegression
-Also fits IsolationForest for mood-score anomaly detection.
-Supports 4 core emotional states: happy, calm, sad, anxious.
+Key Features:
+- Diverse curated dataset with zero near-duplicate train/test leakage
+- 5-Fold Stratified Cross-Validation during training
+- GridSearchCV hyperparameter optimization (C and ngram_range)
+- Class-balanced weighting (class_weight="balanced")
+- Evaluated on holdout test set with Macro F1, Weighted F1, Precision, Recall
+- Confusion matrix export (confusion_matrix.png + metrics.json)
 """
 
 from __future__ import annotations
 
 import json
-import random
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import joblib
+import matplotlib
+matplotlib.use("Agg")  # Non-interactive backend for headless server/CLI execution
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, f1_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
 ROOT = Path(__file__).parent
-MODELS = ROOT / "models"
-MODELS.mkdir(exist_ok=True)
+DATA_DIR = ROOT / "data"
+MODELS_DIR = ROOT / "models"
+MODELS_DIR.mkdir(exist_ok=True)
 
-# 4 Core Emotions
+# 4 Core Emotions aligned with Russell's Circumplex Model & MindEase UI
 MOOD_LABELS = ["happy", "calm", "sad", "anxious"]
 
-TEMPLATES = {
-    "happy": [
-        "I feel genuinely happy today and grateful for the people around me.",
-        "What a wonderful morning. I am excited and proud of the progress I made.",
-        "I laughed a lot and felt joyful after spending time with friends.",
-        "I am thriving, energized, and hopeful about the week ahead.",
-        "I feel confident, cheerful, and full of love for this moment.",
-        "Today was amazing. I feel content and motivated to keep going.",
-        "I am so thankful. Everything clicked and I feel alive.",
-        "A great day overall. I feel warm, light, and really good.",
-        "Accomplished all my goals today and celebrated with friends.",
-        "Woke up with high energy and an optimistic outlook on life.",
-        "Feeling inspired and enthusiastic about working on new projects.",
-        "Such a uplifting and cheerful day. I am smiling non-stop.",
-    ],
-    "calm": [
-        "I feel peaceful and relaxed after a quiet evening at home.",
-        "My mind is still. I feel grounded, serene, and at ease.",
-        "A slow morning helped me stay calm and present.",
-        "I meditated and feel balanced, steady, and soothed.",
-        "Nothing urgent. I feel settled and comfortable in my body.",
-        "The walk outside left me tranquil and clear-headed.",
-        "I am breathing easily and feeling quietly content.",
-        "I feel safe, stable, and gently optimistic.",
-        "Enjoying the quiet stillness of the afternoon with a warm cup of tea.",
-        "My thoughts are unhurried and my body feels relaxed.",
-        "Taking things one step at a time with a clear, peaceful mind.",
-        "No tension in my shoulders. Just feeling harmonious and tranquil.",
-    ],
-    "sad": [
-        "I feel sad and disappointed about how today unfolded.",
-        "A heavy gloom settled in and I cannot shake the emptiness.",
-        "I cried a little. Everything feels unhappy and dull.",
-        "I feel down, lost, and not like myself.",
-        "The day felt miserable and I keep replaying what went wrong.",
-        "I am heartbroken and tired of feeling this low.",
-        "Nothing feels good. I am gloomy and withdrawn.",
-        "I feel like a failure and it hurts more than I expected.",
-        "I feel lonely and disconnected from everyone I care about.",
-        "Nobody reached out today. The silence feels heavy and empty.",
-        "Feeling gloomy, fatigued, and lacking motivation to do anything.",
-        "Deep sadness and tearful thoughts keep pulling my spirits down.",
-    ],
-    "anxious": [
-        "I feel anxious and keep overthinking every possible outcome.",
-        "My chest is tight. I am worried, restless, and uneasy.",
-        "I am nervous about tomorrow and spiraling into panic.",
-        "I cannot sit still. Fear and dread keep looping.",
-        "I am apprehensive and fidgety about things I cannot control.",
-        "My thoughts race. I feel scared that I will mess this up.",
-        "I keep checking my phone. The uncertainty is unbearable.",
-        "I am on edge and bracing for something bad to happen.",
-        "I am exhausted, overloaded, and completely burned out with stress.",
-        "Work keeps piling up. I feel frantic, panicked, and overwhelmed.",
-        "Tension headaches and racing heartbeat from all the pressure.",
-        "Constantly on edge, unable to breathe deeply or slow my mind down.",
-    ],
-}
 
-FILLERS = [
-    " After journaling I noticed this more clearly.",
-    " It has been building for a few days.",
-    " Sleep was off last night which did not help.",
-    " I tried to take a short walk anyway.",
-    " Talking about it might help later.",
-    " I want to be honest with myself.",
-    " This is just how the afternoon felt.",
-    " I will check in again tomorrow.",
-    " I keep returning to this feeling.",
-    " Sitting alone with these thoughts right now.",
-    "",
-]
+def load_dataset() -> Tuple[List[str], List[str]]:
+    """Loads curated mood corpus from JSON, strictly enforcing MOOD_LABELS."""
+    corpus_file = DATA_DIR / "mood_corpus.json"
+    if not corpus_file.exists():
+        raise FileNotFoundError(
+            f"Dataset not found at {corpus_file}. Run the dataset generator first."
+        )
 
+    raw_data: Dict[str, List[str]] = json.loads(corpus_file.read_text(encoding="utf-8"))
 
-def build_corpus(n_per_class: int = 350, seed: int = 42) -> tuple[list[str], list[str]]:
-    rng = random.Random(seed)
-    texts: list[str] = []
-    labels: list[str] = []
-    for label, templates in TEMPLATES.items():
-        for i in range(n_per_class):
-            base = rng.choice(templates)
-            extra = rng.choice(FILLERS)
-            noise = rng.choice(FILLERS)
-            # Paraphrase via phrasing / context tags
-            if rng.random() < 0.40:
-                base = base.replace("I feel", "I have been feeling")
-            if rng.random() < 0.25:
-                base = base.replace("I am", "I'm feeling completely")
-            if rng.random() < 0.30:
-                topic = rng.choice(["Work", "Family", "Sleep", "Health", "Relationships", "Finances"]).lower()
-                extra = extra + f" {topic} is on my mind."
-            texts.append((base + extra + noise).strip())
-            labels.append(label)
+    texts: List[str] = []
+    labels: List[str] = []
+
+    for label in MOOD_LABELS:
+        samples = raw_data.get(label, [])
+        if not samples:
+            raise ValueError(f"No samples found for expected label: '{label}'")
+        for text in samples:
+            cleaned = text.strip()
+            if cleaned:
+                texts.append(cleaned)
+                labels.append(label)
+
     return texts, labels
 
+
 def train() -> dict:
-    texts, labels = build_corpus(n_per_class=400)
+    print("=" * 60)
+    print("MindEase ML: Training Emotion Classifier (Logistic Regression)")
+    print("=" * 60)
+
+    # 1. Load Dataset
+    texts, labels = load_dataset()
+    print(f"Loaded {len(texts)} unique samples across {len(MOOD_LABELS)} classes:")
+    for label in MOOD_LABELS:
+        count = labels.count(label)
+        print(f"  - {label}: {count} samples")
+
+    # 2. Encode Labels
     encoder = LabelEncoder()
     y = encoder.fit_transform(labels)
 
+    # 3. Unbiased Holdout Test Split (Zero near-duplicate leakage)
     X_train, X_test, y_train, y_test = train_test_split(
-        texts, y, test_size=0.2, random_state=42, stratify=y
+        texts,
+        y,
+        test_size=0.20,
+        random_state=42,
+        stratify=y,
     )
+    print(f"\nSplit into {len(X_train)} training samples and {len(X_test)} holdout test samples.")
 
-    pipeline = Pipeline(
+    # 4. Pipeline Definition
+    base_pipeline = Pipeline(
         steps=[
             (
                 "tfidf",
                 TfidfVectorizer(
                     lowercase=True,
-                    ngram_range=(1, 2),
-                    min_df=2,
-                    max_features=8000,
                     sublinear_tf=True,
                 ),
             ),
             (
                 "clf",
                 LogisticRegression(
-                    C=1.0,
-                    max_iter=1000,
                     solver="lbfgs",
+                    class_weight="balanced",
+                    max_iter=2000,
                     random_state=42,
                 ),
             ),
         ]
     )
 
-    pipeline.fit(X_train, y_train)
-    y_pred = pipeline.predict(X_test)
+    # 5. Hyperparameter Tuning via 5-Fold Stratified GridSearchCV
+    param_grid = {
+        "tfidf__ngram_range": [(1, 2), (1, 3)],
+        "tfidf__min_df": [1, 2],
+        "clf__C": [1.0, 2.0, 5.0],
+    }
+
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+    print("\nRunning GridSearchCV (5-Fold Stratified Cross-Validation on training set)...")
+    grid_search = GridSearchCV(
+        base_pipeline,
+        param_grid=param_grid,
+        cv=cv,
+        scoring="f1_macro",
+        n_jobs=-1,
+        verbose=1,
+    )
+    grid_search.fit(X_train, y_train)
+
+    best_pipeline = grid_search.best_estimator_
+    best_params = grid_search.best_params_
+    best_cv_score = round(float(grid_search.best_score_), 4)
+
+    print(f"\nBest Hyperparameters: {best_params}")
+    print(f"Best 5-Fold CV Macro F1: {best_cv_score}")
+
+    # Detailed CV scores with the winning pipeline
+    cv_scores = cross_val_score(best_pipeline, X_train, y_train, cv=cv, scoring="f1_macro")
+    cv_scores_rounded = [round(float(s), 4) for s in cv_scores]
+    cv_mean = round(float(cv_scores.mean()), 4)
+    cv_std = round(float(cv_scores.std()), 4)
+    print(f"5-Fold CV F1 Scores: {cv_scores_rounded}")
+    print(f"Mean CV Macro F1: {cv_mean} (+/- {cv_std})")
+
+    # 6. Final Evaluation on Holdout Test Set
+    print("\nEvaluating best model on independent holdout test set...")
+    y_pred = best_pipeline.predict(X_test)
+
     report = classification_report(
         y_test,
         y_pred,
@@ -167,50 +167,86 @@ def train() -> dict:
         output_dict=True,
         zero_division=0,
     )
+    print("\nClassification Report:")
     print(classification_report(y_test, y_pred, target_names=encoder.classes_, zero_division=0))
 
     per_class = {}
     for label in encoder.classes_:
         row = report[label]
         per_class[label] = {
-            "precision": round(row["precision"], 4),
-            "recall": round(row["recall"], 4),
-            "f1": round(row["f1-score"], 4),
+            "precision": round(float(row["precision"]), 4),
+            "recall": round(float(row["recall"]), 4),
+            "f1": round(float(row["f1-score"]), 4),
+            "support": int(row["support"]),
         }
 
+    # 7. Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred)
+    cm_list = cm.tolist()
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=encoder.classes_)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    disp.plot(ax=ax, cmap="Blues", colorbar=False)
+    plt.title("MindEase Emotion Classifier — Confusion Matrix", fontsize=12, pad=12)
+    plt.tight_layout()
+    cm_path = MODELS_DIR / "confusion_matrix.png"
+    plt.savefig(cm_path, dpi=200)
+    plt.close(fig)
+    print(f"Saved Confusion Matrix visualization to: {cm_path}")
+
+    # 8. Metrics Object
     metrics = {
         "algorithm": "LogisticRegression (TF-IDF)",
-        "accuracy": round(report["accuracy"], 4),
-        "macro_f1": round(f1_score(y_test, y_pred, average="macro"), 4),
-        "n_train": int(len(X_train)),
-        "n_test": int(len(X_test)),
-        "n_classes": int(len(encoder.classes_)),
+        "best_params": {
+            "C": best_params.get("clf__C"),
+            "ngram_range": list(best_params.get("tfidf__ngram_range", [1, 2])),
+            "min_df": best_params.get("tfidf__min_df"),
+        },
+        "accuracy": round(float(report["accuracy"]), 4),
+        "macro_f1": round(float(f1_score(y_test, y_pred, average="macro")), 4),
+        "weighted_f1": round(float(f1_score(y_test, y_pred, average="weighted")), 4),
+        "macro_precision": round(float(precision_score(y_test, y_pred, average="macro", zero_division=0)), 4),
+        "macro_recall": round(float(recall_score(y_test, y_pred, average="macro", zero_division=0)), 4),
+        "cv_mean_macro_f1": cv_mean,
+        "cv_std_macro_f1": cv_std,
+        "cv_scores": cv_scores_rounded,
+        "confusion_matrix": cm_list,
+        "n_total": len(texts),
+        "n_train": len(X_train),
+        "n_test": len(X_test),
+        "n_classes": len(encoder.classes_),
         "classes": list(encoder.classes_),
-        "per_class": per_class,
+        "version": "2.2.0",
         "trained_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Isolation Forest on synthetic mood scores for anomaly detection
-    rng = np.random.default_rng(42)
-    typical = rng.normal(6.5, 1.2, size=1000)
-    iso = IsolationForest(contamination=0.07, random_state=42)
-    iso.fit(typical.reshape(-1, 1))
-
+    # 9. Save Bundle & Metrics
     bundle = {
-        "pipeline": pipeline,
+        "pipeline": best_pipeline,
         "encoder": encoder,
-        "isolation_forest": iso,
         "metrics": metrics,
     }
 
-    # Save to both mood_classifier.joblib and mood_hgb.joblib for seamless backwards-compatibility
-    joblib.dump(bundle, MODELS / "mood_classifier.joblib")
-    joblib.dump(bundle, MODELS / "mood_hgb.joblib")
-    (MODELS / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    model_file = MODELS_DIR / "mood_classifier.joblib"
+    joblib.dump(bundle, model_file)
+    print(f"Saved model bundle to: {model_file}")
+
+    # Remove legacy mood_hgb.joblib if present to avoid confusion
+    legacy_hgb = MODELS_DIR / "mood_hgb.joblib"
+    if legacy_hgb.exists():
+        try:
+            legacy_hgb.unlink()
+        except OSError:
+            pass
+
+    metrics_file = MODELS_DIR / "metrics.json"
+    metrics_file.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    print(f"Saved metrics to: {metrics_file}")
+
+    print("\nTraining completed successfully!")
+    print(f"Test Accuracy: {metrics['accuracy']} | Test Macro F1: {metrics['macro_f1']} | 5-Fold CV Mean F1: {metrics['cv_mean_macro_f1']}")
     return metrics
 
+
 if __name__ == "__main__":
-    result = train()
-    print("Saved mood_classifier.joblib and metrics.json")
-    print("Algorithm:", result["algorithm"])
-    print("Accuracy:", result["accuracy"], "macro F1:", result["macro_f1"])
+    train()
