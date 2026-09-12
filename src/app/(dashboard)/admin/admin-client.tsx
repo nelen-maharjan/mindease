@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/toaster";
 import { useMemo, useState } from "react";
 import {
   Download, ChevronLeft, ChevronRight, Activity, Server, ShieldAlert, Users,
-  Megaphone, Cpu, RefreshCw, CheckCircle2, Clock, MessageSquare, AlertTriangle, Eye
+  Megaphone, Cpu, CheckCircle2, Clock, MessageSquare, AlertTriangle, Eye, Mail, Bell, Send
 } from "lucide-react";
 
 const MOOD_COLORS: Record<string, string> = {
@@ -37,6 +37,24 @@ interface UserItem {
   _count: { moodLogs: number; journalEntries: number; goals: number; crisisFlags: number };
 }
 
+interface CrisisFlagItem {
+  id: string;
+  userId: string;
+  severity: string;
+  triggerWords: string[];
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    createdAt?: string;
+    journalEntries?: Array<{ title: string; content: string; createdAt: string }>;
+    moodLogs?: Array<{ mood: string; intensity: number; notes: string | null; loggedAt: string }>;
+  };
+}
+
 export function AdminDashboardClient({ adminName, adminId }: { adminName: string; adminId?: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -54,6 +72,10 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
   const [crisisPage, setCrisisPage] = useState(1);
   const [resolutionNote, setResolutionNote] = useState<Record<string, string>>({});
   const [showNoteFor, setShowNoteFor] = useState<string | null>(null);
+
+  // ─── Intervention Modal State ─────────────────────────────────────
+  const [selectedCrisisFlag, setSelectedCrisisFlag] = useState<CrisisFlagItem | null>(null);
+  const [customOutreachMsg, setCustomOutreachMsg] = useState("");
 
   // ─── Broadcast state ──────────────────────────────────────────────
   const [broadcastTitle, setBroadcastTitle] = useState("");
@@ -139,6 +161,40 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
       setShowNoteFor(null);
       setResolutionNote((prev) => { const n = { ...prev }; delete n[vars.id]; return n; });
       toast({ title: vars.resolved ? "Crisis flag resolved" : "Crisis flag reopened", type: "success" });
+    },
+  });
+
+  const interventionMutation = useMutation({
+    mutationFn: async (payload: {
+      flagId: string;
+      action: "SEND_SAFETY_NOTIFICATION" | "RESOLVE_WITH_OUTREACH" | "LOG_DIRECT_OUTREACH";
+      customMessage?: string;
+      resolutionNote?: string;
+    }) => {
+      const r = await fetch("/api/admin/crisis/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error || "Action failed");
+      return json;
+    },
+    onSuccess: (res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-crisis"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      setSelectedCrisisFlag(null);
+      setCustomOutreachMsg("");
+      if (vars.action === "SEND_SAFETY_NOTIFICATION") {
+        toast({ title: "Emergency Safety Notification sent to user's inbox!", type: "success" });
+      } else if (vars.action === "RESOLVE_WITH_OUTREACH") {
+        toast({ title: "Crisis flag resolved with emergency safety check!", type: "success" });
+      } else {
+        toast({ title: "Direct email outreach logged successfully", type: "info" });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message || "Intervention action failed", type: "error" });
     },
   });
 
@@ -243,7 +299,7 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
             Admin Command Center
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Platform health, safety moderation, system broadcasts &amp; ML analytics — signed in as <strong>{adminName}</strong>
+            Platform health, emergency safety moderation, system broadcasts &amp; ML analytics — signed in as <strong>{adminName}</strong>
           </p>
         </div>
 
@@ -502,15 +558,21 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
                 {!crisisQuery.isLoading && (crisisQuery.data?.data || []).length === 0 && (
                   <p className="text-sm text-muted-foreground py-8 text-center">No crisis flags recorded for this filter</p>
                 )}
-                {(crisisQuery.data?.data || []).map((flag: {
-                  id: string; severity: string; triggerWords: string[]; resolvedAt: string | null;
-                  resolutionNote: string | null; createdAt: string;
-                  user: { name: string | null; email: string };
-                }) => (
-                  <div key={flag.id} className="p-3 rounded-xl border border-border/70 bg-card space-y-2">
+                {(crisisQuery.data?.data || []).map((flag: CrisisFlagItem) => (
+                  <div
+                    key={flag.id}
+                    className={`p-3.5 rounded-xl border transition-all ${
+                      flag.severity === "high" && !flag.resolvedAt
+                        ? "border-destructive/50 bg-destructive/5 shadow-xs"
+                        : "border-border/70 bg-card"
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{flag.user.name || flag.user.email}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">{flag.user.name || flag.user.email}</p>
+                          <span className="text-xs text-muted-foreground">({flag.user.email})</span>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           Logged {format(new Date(flag.createdAt), "MMM d, yyyy HH:mm")}
                         </p>
@@ -533,13 +595,26 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
                         <Badge variant={flag.resolvedAt ? "success" : "destructive"}>
                           {flag.resolvedAt ? "Resolved" : "Open"}
                         </Badge>
+
+                        {/* High severity emergency intervention button */}
+                        {flag.severity === "high" && !flag.resolvedAt && (
+                          <Button
+                            size="xs"
+                            variant="destructive"
+                            onClick={() => setSelectedCrisisFlag(flag)}
+                            className="rounded-xl text-xs font-semibold shadow-xs"
+                          >
+                            <ShieldAlert className="size-3.5 mr-1" /> Emergency Protocol
+                          </Button>
+                        )}
+
                         <Button
                           size="xs"
                           variant="outline"
                           onClick={() => setShowNoteFor(showNoteFor === flag.id ? null : flag.id)}
                           className="rounded-xl"
                         >
-                          {flag.resolvedAt ? "Reopen" : "Resolve"}
+                          {flag.resolvedAt ? "Reopen" : "Quick Resolve"}
                         </Button>
                       </div>
                     </div>
@@ -735,6 +810,131 @@ export function AdminDashboardClient({ adminName, adminId }: { adminName: string
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {/* ─── Emergency High Severity Intervention Modal ─────────────────── */}
+      {selectedCrisisFlag && (
+        <Dialog open={Boolean(selectedCrisisFlag)} onOpenChange={() => setSelectedCrisisFlag(null)}>
+          <DialogContent className="max-w-xl rounded-2xl p-6 space-y-4 border-destructive/40 bg-card">
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-destructive/10 text-destructive">
+                  <ShieldAlert className="size-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-destructive">Emergency Safety Protocol</DialogTitle>
+                  <p className="text-xs text-muted-foreground">High severity crisis flag for user {selectedCrisisFlag.user.name || selectedCrisisFlag.user.email}</p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {/* Flag Details & Trigger Words */}
+            <div className="space-y-2 p-3.5 rounded-xl border border-destructive/30 bg-destructive/5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">Trigger Words Detected:</span>
+                <Badge variant="destructive">{selectedCrisisFlag.severity} severity</Badge>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedCrisisFlag.triggerWords.map((w) => (
+                  <span key={w} className="text-xs bg-destructive/20 text-destructive font-mono px-2 py-0.5 rounded-md font-semibold">
+                    {w}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Logged at: {format(new Date(selectedCrisisFlag.createdAt), "MMM d, yyyy HH:mm:ss")}</p>
+            </div>
+
+            {/* User Context Preview */}
+            <div className="space-y-2 text-xs">
+              <p className="font-semibold text-foreground">User Context &amp; Recent Activity:</p>
+
+              {selectedCrisisFlag.user.journalEntries && selectedCrisisFlag.user.journalEntries.length > 0 ? (
+                <div className="p-3 rounded-xl border bg-muted/30 space-y-1">
+                  <p className="font-medium text-foreground">Latest Journal Entry: &quot;{selectedCrisisFlag.user.journalEntries[0].title}&quot;</p>
+                  <p className="text-muted-foreground italic line-clamp-3">&quot;{selectedCrisisFlag.user.journalEntries[0].content}&quot;</p>
+                </div>
+              ) : selectedCrisisFlag.user.moodLogs && selectedCrisisFlag.user.moodLogs.length > 0 ? (
+                <div className="p-3 rounded-xl border bg-muted/30 space-y-1">
+                  <p className="font-medium text-foreground">Latest Mood Log: {selectedCrisisFlag.user.moodLogs[0].mood} ({selectedCrisisFlag.user.moodLogs[0].intensity}/10)</p>
+                  {selectedCrisisFlag.user.moodLogs[0].notes && <p className="text-muted-foreground italic">&quot;{selectedCrisisFlag.user.moodLogs[0].notes}&quot;</p>}
+                </div>
+              ) : (
+                <p className="text-muted-foreground italic">No recent journal entries recorded.</p>
+              )}
+            </div>
+
+            {/* Custom Outreach Note */}
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Custom Safety Check Note (Optional)</Label>
+              <textarea
+                value={customOutreachMsg}
+                onChange={(e) => setCustomOutreachMsg(e.target.value)}
+                placeholder="Optional custom message to send in the safety notification…"
+                rows={2}
+                className="w-full text-xs rounded-xl border border-input p-2.5 bg-background resize-none"
+              />
+            </div>
+
+            {/* Intervention Action Buttons */}
+            <div className="space-y-2 pt-2 border-t border-border">
+              <p className="text-xs font-semibold text-foreground">Select Admin Intervention Action:</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Action 1: In-app Safety Notification */}
+                <Button
+                  size="sm"
+                  isLoading={interventionMutation.isPending}
+                  onClick={() =>
+                    interventionMutation.mutate({
+                      flagId: selectedCrisisFlag.id,
+                      action: "SEND_SAFETY_NOTIFICATION",
+                      customMessage: customOutreachMsg.trim() || undefined,
+                    })
+                  }
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs flex items-center justify-center gap-1.5"
+                >
+                  <Bell className="size-3.5" /> Send Safety Notification
+                </Button>
+
+                {/* Action 2: Direct Email Outreach */}
+                <a
+                  href={`mailto:${selectedCrisisFlag.user.email}?subject=${encodeURIComponent("MindEase Support & Safety Check 🌿")}&body=${encodeURIComponent(
+                    `Hi ${selectedCrisisFlag.user.name || "there"},\n\nOur MindEase support team wanted to reach out and check in on you. If you are experiencing intense distress or need immediate support, please connect with the 988 Suicide & Crisis Lifeline (call/text 988, free & 24/7).\n\nWarmly,\nMindEase Support Team`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() =>
+                    interventionMutation.mutate({
+                      flagId: selectedCrisisFlag.id,
+                      action: "LOG_DIRECT_OUTREACH",
+                      resolutionNote: "Logged direct emergency email outreach to user.",
+                    })
+                  }
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-border bg-background hover:bg-muted transition-colors text-foreground"
+                >
+                  <Mail className="size-3.5 text-blue-500" /> Send Email Outreach
+                </a>
+              </div>
+
+              {/* Action 3: Resolve Flag with Outreach Record */}
+              <Button
+                size="sm"
+                variant="destructive"
+                isLoading={interventionMutation.isPending}
+                onClick={() =>
+                  interventionMutation.mutate({
+                    flagId: selectedCrisisFlag.id,
+                    action: "RESOLVE_WITH_OUTREACH",
+                    resolutionNote: customOutreachMsg.trim() || "Resolved via Emergency Protocol (In-app safety check notification & 988 helpline info sent).",
+                  })
+                }
+                className="w-full rounded-xl text-xs mt-1"
+              >
+                <CheckCircle2 className="size-3.5 mr-1.5" /> Resolve Crisis Flag &amp; Record Intervention
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* ─── User Inspection Modal ─────────────────────────────────────── */}

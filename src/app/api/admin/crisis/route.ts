@@ -25,7 +25,24 @@ export async function GET(request: NextRequest) {
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            createdAt: true,
+            journalEntries: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { title: true, content: true, createdAt: true },
+            },
+            moodLogs: {
+              orderBy: { loggedAt: "desc" },
+              take: 1,
+              select: { mood: true, intensity: true, notes: true, loggedAt: true },
+            },
+          },
+        },
       },
     }),
     prisma.crisisFlag.count({ where }),
