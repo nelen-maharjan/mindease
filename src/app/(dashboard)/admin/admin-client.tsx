@@ -37,7 +37,7 @@ interface UserItem {
   _count: { moodLogs: number; journalEntries: number; goals: number; crisisFlags: number };
 }
 
-export function AdminDashboardClient({ adminName }: { adminName: string }) {
+export function AdminDashboardClient({ adminName, adminId }: { adminName: string; adminId?: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
@@ -99,18 +99,27 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
   // ─── Mutations ────────────────────────────────────────────────────
   const roleMutation = useMutation({
     mutationFn: async (payload: { userId: string; role: "USER" | "ADMIN" }) => {
+      if (adminId && payload.userId === adminId && payload.role !== "ADMIN") {
+        throw new Error("You cannot demote your own admin account");
+      }
       const r = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error("Failed to update role");
+      if (!r.ok) {
+        const err = await r.json();
+        throw new Error(err.error || "Failed to update role");
+      }
       return r.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
       toast({ title: "User role updated", type: "success" });
+    },
+    onError: (err: Error) => {
+      toast({ title: err.message || "Could not update role", type: "error" });
     },
   });
 
@@ -375,40 +384,49 @@ export function AdminDashboardClient({ adminName }: { adminName: string }) {
           </CardHeader>
           <CardContent className="space-y-2">
             {usersQuery.isLoading && <p className="text-sm text-muted-foreground py-6 text-center">Loading users…</p>}
-            {(usersQuery.data?.data || []).map((u: UserItem) => (
-              <div key={u.id} className="flex items-start justify-between gap-3 py-3 border-b border-border/60 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground truncate">{u.name || "Unnamed User"}</p>
-                    <Badge variant={u.role === "ADMIN" ? "wellness" : "secondary"} className="text-[10px] px-1.5 py-0">
-                      {u.role}
-                    </Badge>
+            {(usersQuery.data?.data || []).map((u: UserItem) => {
+              const isSelf = Boolean(adminId && u.id === adminId);
+              return (
+                <div key={u.id} className="flex items-start justify-between gap-3 py-3 border-b border-border/60 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-foreground truncate">{u.name || "Unnamed User"}</p>
+                      <Badge variant={u.role === "ADMIN" ? "wellness" : "secondary"} className="text-[10px] px-1.5 py-0">
+                        {u.role}
+                      </Badge>
+                      {isSelf && (
+                        <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30 px-1.5 py-0">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">
+                      {u._count.moodLogs} moods · {u._count.journalEntries} journals · {u._count.goals} goals
+                      {u._count.crisisFlags > 0 && (
+                        <span className="ml-1 text-destructive font-medium">· ⚠️ {u._count.crisisFlags} crisis flags</span>
+                      )}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    {u._count.moodLogs} moods · {u._count.journalEntries} journals · {u._count.goals} goals
-                    {u._count.crisisFlags > 0 && (
-                      <span className="ml-1 text-destructive font-medium">· ⚠️ {u._count.crisisFlags} crisis flags</span>
-                    )}
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button size="xs" variant="ghost" onClick={() => setSelectedUser(u)} className="rounded-xl">
-                    <Eye className="size-3.5 mr-1" /> Inspect
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={roleMutation.isPending}
-                    onClick={() => roleMutation.mutate({ userId: u.id, role: u.role === "ADMIN" ? "USER" : "ADMIN" })}
-                    className="rounded-xl text-xs"
-                  >
-                    {u.role === "ADMIN" ? "Demote" : "Promote"}
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button size="xs" variant="ghost" onClick={() => setSelectedUser(u)} className="rounded-xl">
+                      <Eye className="size-3.5 mr-1" /> Inspect
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={roleMutation.isPending || isSelf}
+                      title={isSelf ? "You cannot demote yourself" : u.role === "ADMIN" ? "Demote to User" : "Promote to Admin"}
+                      onClick={() => roleMutation.mutate({ userId: u.id, role: u.role === "ADMIN" ? "USER" : "ADMIN" })}
+                      className="rounded-xl text-xs"
+                    >
+                      {u.role === "ADMIN" ? "Demote" : "Promote"}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Pagination */}
             {usersMeta && usersMeta.pages > 1 && (

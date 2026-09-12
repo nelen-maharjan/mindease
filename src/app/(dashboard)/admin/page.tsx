@@ -8,5 +8,10 @@ export default async function AdminPage() {
   const admin = await getAdminUser();
   if (!admin) redirect("/dashboard");
 
-  return <AdminDashboardClient adminName={admin.user.name || admin.user.email} />;
+  return (
+    <AdminDashboardClient
+      adminName={admin.user.name || admin.user.email}
+      adminId={admin.user.id}
+    />
+  );
 }

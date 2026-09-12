@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { signOut, useSession } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/index";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LogOut } from "lucide-react";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "⊞" },
@@ -32,14 +32,18 @@ const adminItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { data: session } = useSession();
   const user = session?.user;
   const isAdmin = (user as { role?: string } | undefined)?.role === "ADMIN";
 
   const handleSignOut = async () => {
-    await signOut();
-    router.push("/login");
+    try {
+      await signOut();
+    } catch {
+      // Ignore signOut errors if session expired
+    } finally {
+      window.location.href = "/login";
+    }
   };
 
   return (
@@ -70,22 +74,25 @@ export function Sidebar() {
 
       {/* User footer */}
       <div className="border-t border-border p-3">
-        <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer group">
-          <Avatar className="h-7 w-7">
-            <AvatarFallback className="text-[11px] bg-gradient-to-br from-indigo-100 to-teal-100 text-indigo-700">
-              {user?.name?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate">{user?.name || "User"}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+        <div className="flex items-center justify-between gap-2.5 px-2 py-1.5 rounded-xl hover:bg-muted/50 transition-colors">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarFallback className="text-[11px] bg-gradient-to-br from-indigo-100 to-teal-100 text-indigo-700 font-semibold">
+                {user?.name?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{user?.name || "User"}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+            </div>
           </div>
           <button
             onClick={handleSignOut}
-            className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+            className="text-muted-foreground hover:text-destructive p-1 rounded-lg hover:bg-destructive/10 transition-colors shrink-0"
             title="Sign out"
+            aria-label="Sign out"
           >
-            ⎋
+            <LogOut className="size-4" />
           </button>
         </div>
       </div>
