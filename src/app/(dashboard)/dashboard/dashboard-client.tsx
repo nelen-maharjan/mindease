@@ -115,8 +115,7 @@ export function DashboardClient({
                 <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <Tooltip
                   contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "12px" }}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(v: any) => [v != null ? `${Number(v).toFixed(1)}/10` : "No data", "Mood"]}
+                  formatter={(v: unknown) => [v != null ? `${Number(v).toFixed(1)}/10` : "No data", "Mood"]}
                 />
                 <Line
                   type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2}

@@ -82,8 +82,7 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                 <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "12px" }}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(v: any) => [`${Number(v ?? 0)}/10`, "Mood score"]} />
+                  formatter={(v: unknown) => [`${Number(v ?? 0)}/10`, "Mood score"]} />
                 <Line type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2.5}
                   dot={{ fill: "#6366f1", r: 3, strokeWidth: 0 }} connectNulls activeDot={{ r: 5 }} />
               </LineChart>
