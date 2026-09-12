@@ -4,7 +4,7 @@ import { MOOD_CONFIG } from "@/lib/utils";
 import type { MoodType } from "@/lib/utils";
 import { format, formatDistanceToNow } from "date-fns";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, Progress, Badge } from "@/components/ui/index";
+import { Card, CardContent, CardHeader, CardTitle, Progress } from "@/components/ui/index";
 import { Button } from "@/components/ui/button";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
