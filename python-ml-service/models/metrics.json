@@ -1,56 +1,56 @@
 {
   "algorithm": "LogisticRegression (TF-IDF)",
   "best_params": {
-    "C": 5.0,
+    "C": 2.0,
     "ngram_range": [
       1,
       2
     ],
-    "min_df": 1
+    "min_df": 2
   },
   "accuracy": 1.0,
   "macro_f1": 1.0,
   "weighted_f1": 1.0,
   "macro_precision": 1.0,
   "macro_recall": 1.0,
-  "cv_mean_macro_f1": 1.0,
-  "cv_std_macro_f1": 0.0,
+  "cv_mean_macro_f1": 0.9977,
+  "cv_std_macro_f1": 0.003,
   "cv_scores": [
     1.0,
+    0.9962,
     1.0,
     1.0,
-    1.0,
-    1.0
+    0.9925
   ],
   "confusion_matrix": [
     [
-      80,
+      86,
       0,
       0,
       0
     ],
     [
       0,
-      80,
+      82,
       0,
       0
     ],
     [
       0,
       0,
-      80,
+      82,
       0
     ],
     [
       0,
       0,
       0,
-      80
+      84
     ]
   ],
-  "n_total": 1600,
-  "n_train": 1280,
-  "n_test": 320,
+  "n_total": 1670,
+  "n_train": 1336,
+  "n_test": 334,
   "n_classes": 4,
   "classes": [
     "anxious",
@@ -59,5 +59,5 @@
     "sad"
   ],
   "version": "2.2.0",
-  "trained_at": "2026-09-11T10:49:10.429267+00:00"
+  "trained_at": "2026-09-12T07:47:46.584440+00:00"
 }
