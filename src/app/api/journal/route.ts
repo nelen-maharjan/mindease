@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { wordCount } from "@/lib/utils";
 import { analyzeJournalText } from "@/lib/ml";
+import { detectCrisisSeverity, getCrisisWords } from "@/lib/openai";
 
 const createJournalSchema = z.object({
   title: z.string().min(1).max(200),
@@ -69,6 +70,22 @@ export async function POST(request: NextRequest) {
     }
 
     const { title, content, tags, moodSnapshot } = parsed.data;
+
+    // Run Safety & Crisis detection on journal content
+    const fullText = `${title} ${content}`;
+    const crisisSeverity = detectCrisisSeverity(fullText);
+    const crisisWords = getCrisisWords(fullText);
+
+    if (crisisSeverity !== "none") {
+      await prisma.crisisFlag.create({
+        data: {
+          userId: session.user.id,
+          severity: crisisSeverity,
+          triggerWords: crisisWords,
+        },
+      });
+    }
+
     let entry = await prisma.journalEntry.create({
       data: {
         userId: session.user.id,

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { wordCount } from "@/lib/utils";
-import { generateJournalReflection } from "@/lib/openai";
+import { generateJournalReflection, detectCrisisSeverity, getCrisisWords } from "@/lib/openai";
 import { analyzeJournalText } from "@/lib/ml";
 
 const updateSchema = z.object({
@@ -46,6 +46,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { generateReflection, ...updateData } = parsed.data;
     const updatePayload: Record<string, unknown> = { ...updateData };
+
+    if (updateData.content || updateData.title) {
+      const fullText = `${updateData.title || existing.title} ${updateData.content || existing.content}`;
+      const crisisSeverity = detectCrisisSeverity(fullText);
+      const crisisWords = getCrisisWords(fullText);
+
+      if (crisisSeverity !== "none") {
+        await prisma.crisisFlag.create({
+          data: {
+            userId: session.user.id,
+            severity: crisisSeverity,
+            triggerWords: crisisWords,
+          },
+        });
+      }
+    }
 
     if (updateData.content) {
       updatePayload.wordCount = wordCount(updateData.content);

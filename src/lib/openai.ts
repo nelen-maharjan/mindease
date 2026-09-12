@@ -7,8 +7,13 @@ export const openai = new OpenAI({
 // Crisis detection keywords (multi-tier)
 const CRISIS_HIGH = [
   "kill myself",
+  "kill my self",
   "end my life",
   "suicide",
+  "suicidal",
+  "suicidal thought",
+  "suicidal thoughts",
+  "suicidal ideation",
   "want to die",
   "self-harm",
   "hurt myself",
@@ -16,6 +21,9 @@ const CRISIS_HIGH = [
   "overdose",
   "no reason to live",
   "better off dead",
+  "end it all",
+  "want to end it",
+  "take my life",
 ];
 const CRISIS_MEDIUM = [
   "hopeless",
@@ -24,6 +32,8 @@ const CRISIS_MEDIUM = [
   "give up on life",
   "don't want to be here",
   "disappear forever",
+  "can't stay alive",
+  "no point in living",
 ];
 
 export function detectCrisisSeverity(text: string): "none" | "medium" | "high" {
@@ -220,7 +230,11 @@ export async function generateLocalJournalReflection(
 ): Promise<string> {
   const lower = entry.toLowerCase();
 
-  // 1. Detect relief and milestone completion
+  // 0. Detect Crisis / Self-harm / Suicidal thoughts
+  const crisis = detectCrisisSeverity(entry);
+  if (crisis !== "none") {
+    return "I can hear how much pain, exhaustion, and pressure you are carrying right now. Please know that your life and well-being matter deeply, and you do not have to carry this alone. If you are experiencing suicidal thoughts or severe distress, please reach out to the 988 Suicide & Crisis Lifeline by calling or texting 988 (free, confidential, 24/7). Would you be open to connecting with a trusted friend, family member, or professional today?";
+  }
   if (
     lower.includes("relieved") ||
     lower.includes("relief") ||
