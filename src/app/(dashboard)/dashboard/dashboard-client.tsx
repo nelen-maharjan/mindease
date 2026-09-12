@@ -58,7 +58,7 @@ export function DashboardClient({
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {greeting}, {userName} ✨
+            {greeting}, {userName} 
           </h1>
           <p className="text-muted-foreground text-sm mt-1">{format(new Date(), "EEEE, MMMM d")}</p>
         </div>
