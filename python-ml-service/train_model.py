@@ -21,7 +21,7 @@ from typing import Dict, List, Tuple
 
 import joblib
 import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend for headless server/CLI execution
+matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer

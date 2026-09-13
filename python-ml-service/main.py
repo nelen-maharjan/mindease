@@ -1,11 +1,3 @@
-"""
-MindEase ML Service — FastAPI
-
-Mood classification uses a trained Logistic Regression model
-(TF-IDF → LogisticRegression). Sentiment and recommendations
-are derived directly from the emotion model. Statistical baseline
-deviation flags unusual mood trajectories.
-"""
 
 from __future__ import annotations
 
@@ -45,7 +37,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://yourdomain.com"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://mindease-plus.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -223,9 +215,6 @@ def analyze_trend(body: TrendRequest):
     if not body.entries:
         raise HTTPException(status_code=400, detail="No entries provided")
 
-    # Combine mood category ordinal baseline with user-reported intensity (1-10)
-    # For positive affect (HAPPY/CALM): higher intensity boosts wellness score
-    # For negative affect (SAD/ANXIOUS): higher intensity lowers wellness score
     scores = []
     for e in body.entries:
         base = MOOD_SCORE_MAP.get(e.mood.upper(), 5)
@@ -242,7 +231,7 @@ def analyze_trend(body: TrendRequest):
     dominant = Counter(moods).most_common(1)[0][0].lower()
 
     anomalies: List[str] = []
-    # Statistical anomaly detection on user's recent personal score baseline
+
     if len(scores) >= 3:
         try:
             stdev = statistics.stdev(scores)
@@ -251,7 +240,6 @@ def analyze_trend(body: TrendRequest):
         except statistics.StatisticsError:
             pass
 
-    # Require at least 4 entries to calculate a statistically meaningful trend direction
     if len(scores) < 4:
         return TrendAnalysis(
             weekly_average=avg,

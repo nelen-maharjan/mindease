@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status") || "all"; // "open" | "resolved" | "all"
-  const severity = searchParams.get("severity") || "all"; // "high" | "medium" | "low" | "all"
+  const status = searchParams.get("status") || "all";
+  const severity = searchParams.get("severity") || "all";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
 

@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
 
     let notificationCreated = false;
 
-    // 1. Send Safety Support Notification to User
     if (action === "SEND_SAFETY_NOTIFICATION" || action === "RESOLVE_WITH_OUTREACH") {
       const defaultMsg = customMessage ||
         `Hi ${userName}, our MindEase support team noticed you've been going through a difficult time and wanted to check in. Your safety and well-being matter deeply to us. If you are experiencing intense distress or suicidal thoughts, please connect with the 988 Suicide & Crisis Lifeline by calling or texting 988 (free, 24/7, confidential). You don't have to carry this alone.`;
@@ -58,7 +57,6 @@ export async function POST(request: NextRequest) {
       notificationCreated = true;
     }
 
-    // 2. Update Crisis Flag if resolving
     const note = resolutionNote ||
       (action === "RESOLVE_WITH_OUTREACH"
         ? "Resolved via automated safety check notification & 988 crisis helpline outreach."
